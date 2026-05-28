@@ -2,8 +2,6 @@ package com.oran.defender.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -17,11 +15,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "player_actions")
+@Table(name = "score_events")
 @Getter
 @Setter
 @NoArgsConstructor
-public class PlayerAction {
+public class ScoreEvent {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -31,26 +29,15 @@ public class PlayerAction {
     private Player player;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "incident_id", nullable = false)
-    private Incident incident;
+    @JoinColumn(name = "game_session_id", nullable = false)
+    private GameSession gameSession;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "action_id", nullable = false)
-    private Action action;
+    @Column(nullable = false, length = 255)
+    private String reason;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 16)
-    private ActionResult result = ActionResult.PARTIAL;
+    @Column(nullable = false)
+    private Integer points = 0;
 
-    @Column(name = "points_awarded", nullable = false)
-    private Integer pointsAwarded = 0;
-
-    @Column(name = "submitted_at", nullable = false)
-    private Instant submittedAt = Instant.now();
-
-    public enum ActionResult {
-        SUCCESS,
-        FAILED,
-        PARTIAL
-    }
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt = Instant.now();
 }
