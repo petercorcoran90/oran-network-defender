@@ -1,6 +1,6 @@
 package com.oran.defender.service;
 
-import com.oran.defender.model.Incident;
+import com.oran.defender.dto.IncidentResponse;
 import com.oran.defender.model.PlayerAction;
 import org.springframework.stereotype.Service;
 
@@ -11,14 +11,15 @@ public class IncidentService {
 
     // TODO: inject IncidentRepository, PlayerRepository, ActionRepository, ScoreService
 
-    public List<Incident> getIncidents(Long sessionId, String status) {
-        // TODO: if status is null return all; otherwise filter by IncidentStatus enum
+    public List<IncidentResponse> getIncidents(Long sessionId, String status) {
+        // TODO: fetch Incident entities (filter by status if provided)
+        // TODO: map each to IncidentResponse.from(incident) before returning
         throw new UnsupportedOperationException("Not implemented");
     }
 
-    public Incident getIncident(Long sessionId, Long incidentId) {
-        // TODO: find by ID, verify it belongs to sessionId, or throw 404
-        // NOTE: do NOT include rootCause in the response — that is server-side only
+    public IncidentResponse getIncident(Long sessionId, Long incidentId) {
+        // TODO: find Incident by ID, verify it belongs to sessionId, or throw 404
+        // TODO: return IncidentResponse.from(incident) — rootCause stays server-side
         throw new UnsupportedOperationException("Not implemented");
     }
 

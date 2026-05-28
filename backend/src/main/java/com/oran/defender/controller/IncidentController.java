@@ -1,6 +1,6 @@
 package com.oran.defender.controller;
 
-import com.oran.defender.model.Incident;
+import com.oran.defender.dto.IncidentResponse;
 import com.oran.defender.model.PlayerAction;
 import com.oran.defender.service.IncidentService;
 import jakarta.validation.Valid;
@@ -23,15 +23,15 @@ public class IncidentController {
 
     // Get all incidents for a session — optionally filter by status (OPEN, RESOLVED, FAILED)
     @GetMapping
-    public List<Incident> getIncidents(@PathVariable Long sessionId,
-                                       @RequestParam(required = false) String status) {
+    public List<IncidentResponse> getIncidents(@PathVariable Long sessionId,
+                                               @RequestParam(required = false) String status) {
         return incidentService.getIncidents(sessionId, status);
     }
 
     // Get a single incident's details including evidence
     @GetMapping("/{incidentId}")
-    public Incident getIncident(@PathVariable Long sessionId,
-                                @PathVariable Long incidentId) {
+    public IncidentResponse getIncident(@PathVariable Long sessionId,
+                                        @PathVariable Long incidentId) {
         return incidentService.getIncident(sessionId, incidentId);
     }
 
