@@ -3,8 +3,8 @@ package com.oran.defender.model;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "score_events")
-public class ScoreEvent {
+@Table(name = "users")
+public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
