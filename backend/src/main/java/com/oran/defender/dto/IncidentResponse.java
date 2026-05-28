@@ -15,20 +15,18 @@ public record IncidentResponse(
         String severity,
         String status,
         String description,
-        String evidenceJson,
         Instant createdAt,
         Instant resolvedAt
 ) {
     public static IncidentResponse from(Incident incident) {
         return new IncidentResponse(
                 incident.getId(),
-                incident.getGameSessionId(),
-                incident.getCellId(),
+                incident.getGameSession().getId(),
+                incident.getCell().getId(),
                 incident.getIncidentType(),
-                incident.getSeverity(),
-                incident.getStatus(),
+                incident.getSeverity().name(),
+                incident.getStatus().name(),
                 incident.getDescription(),
-                incident.getEvidenceJson(),
                 incident.getCreatedAt(),
                 incident.getResolvedAt()
         );
