@@ -33,7 +33,6 @@ CELL_COUNT = int(os.environ.get("CELL_COUNT", "6"))
 # Difficulty (set on the session at creation) -> number of towers.
 DIFFICULTY_CELLS = {"EASY": 3, "MEDIUM": 6, "HARD": 9}
 DRIFT_EVERY = int(os.environ.get("DRIFT_EVERY_TICKS", "2"))
-MAX_INCIDENT_CELLS = int(os.environ.get("MAX_INCIDENT_CELLS", "5"))
 # Difficulty ramp: new incidents arrive this many ticks apart early -> late in the match.
 SPAWN_TICKS_EARLY = int(os.environ.get("SPAWN_TICKS_EARLY", "4"))
 SPAWN_TICKS_LATE = int(os.environ.get("SPAWN_TICKS_LATE", "1"))
@@ -164,8 +163,7 @@ def seed_session(session):
     canonical = {n: healthy_metrics() for n in names}
     for idx, rc in incidents:
         apply_symptom(canonical[names[idx]], rc)
-    state = {"cells": canonical, "players": {}, "incident_cells": {names[i] for i, _ in incidents},
-             "rng": random.Random(sid * 7919), "tick": 0}
+    state = {"cells": canonical, "players": {}, "rng": random.Random(sid * 7919), "tick": 0}
     for p in players:
         pid = p["id"]
         created = post("/api/internal/sessions/%d/cells" % sid,
@@ -193,10 +191,7 @@ def register_existing(sid):
         canonical[c["cellName"]] = {k: c[k] for k in ("signalQuality", "userLoad", "latency",
                                     "packetLoss", "alarmCount", "energyUsage")}
         canonical[c["cellName"]]["healthStatus"] = c["healthStatus"]
-    incidents = get("/api/sessions/%d/incidents" % sid)
-    id_to_name = {c["id"]: c["cellName"] for c in cells}
-    incident_cells = {id_to_name.get(i["cellId"]) for i in incidents if i["cellId"] in id_to_name}
-    SESSIONS[sid] = {"cells": canonical, "players": players, "incident_cells": incident_cells,
+    SESSIONS[sid] = {"cells": canonical, "players": players,
                      "rng": random.Random(sid * 7919), "tick": 0}
     print("[sim] re-registered existing session %d" % sid, flush=True)
     return True
@@ -210,6 +205,20 @@ def push_metrics(sid, state, name):
             post("/api/internal/cells/%d/metrics" % cell_id, cell_spec(name, m))
 
 
+def open_busy_cells(sid, state):
+    """Cell names that currently have an OPEN incident for EITHER player — read live from
+    the backend, so a cell frees up once both players resolve it (and we never stack a
+    second incident on a player who hasn't dealt with the first)."""
+    busy = set()
+    for pid, name_to_id in state["players"].items():
+        id_to_name = {cid: n for n, cid in name_to_id.items()}
+        for inc in (get("/api/sessions/%d/incidents?playerId=%d&status=OPEN" % (sid, pid)) or []):
+            name = id_to_name.get(inc["cellId"])
+            if name:
+                busy.add(name)
+    return busy
+
+
 def tick_session(session):
     sid = session["id"]
     state = SESSIONS[sid]
@@ -217,31 +226,35 @@ def tick_session(session):
     state["tick"] += 1
     tick = state["tick"]
     frac = elapsed_fraction(session)
+    busy = open_busy_cells(sid, state)
 
     if tick % DRIFT_EVERY == 0:
         for name in state["cells"]:
-            if name in state["incident_cells"]:
+            if name in busy:
                 continue  # keep incident evidence stable until it's dealt with
             drift(state["cells"][name], rng)
             push_metrics(sid, state, name)
 
-    # Difficulty ramp: incidents arrive further apart early, faster late; harder root
-    # causes (HIGH severity) only come into the pool past the midpoint.
+    # Difficulty + time ramp: aim for more simultaneous open incidents on bigger/later
+    # games, spawned closer together as the clock runs down. HIGH-severity root causes
+    # only enter the pool past the midpoint.
+    cell_count = len(state["cells"])
+    target = max(2, round(cell_count * (0.3 + 0.6 * frac)))
     interval = max(SPAWN_TICKS_LATE, round(SPAWN_TICKS_EARLY - (SPAWN_TICKS_EARLY - SPAWN_TICKS_LATE) * frac))
     pool = EARLY_KEYS if frac < 0.4 else ALL_KEYS
-    if tick % interval == 0 and len(state["incident_cells"]) < MAX_INCIDENT_CELLS:
-        healthy = [n for n in state["cells"] if n not in state["incident_cells"]]
-        if healthy:
-            name = rng.choice(healthy)
+    if tick % interval == 0 and len(busy) < target:
+        free = [n for n in state["cells"] if n not in busy]
+        if free:
+            name = rng.choice(free)
             rc = rng.choice(pool)
             apply_symptom(state["cells"][name], rc)
-            state["incident_cells"].add(name)
             push_metrics(sid, state, name)
             for pid, name_to_id in state["players"].items():
                 post("/api/internal/sessions/%d/incidents" % sid,
                      {"playerId": pid, "cellId": name_to_id[name], "incidentType": ARCHETYPES[rc]["type"],
                       "severity": ARCHETYPES[rc]["severity"], "rootCause": rc, "description": DESCRIPTIONS[rc]})
-            print("[sim] new incident on %s (session %d, frac=%.2f)" % (name, sid, frac), flush=True)
+            print("[sim] new incident on %s (session %d, frac=%.2f, open->%d/%d)"
+                  % (name, sid, frac, len(busy) + 1, target), flush=True)
 
 
 def loop_once():
