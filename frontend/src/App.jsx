@@ -1,23 +1,13 @@
-import React, { useState, useEffect, useReducer } from 'react';
-import { GameStore, Selectors as GameSelectors } from './store.js';
+import React, { useState, useEffect, useReducer, useMemo } from 'react';
+import { createBackendStore, Selectors as GameSelectors } from './store.js';
 import { Icon } from './ui.jsx';
 import { Dashboard, NetworkMapPage, Incidents, IncidentDetail, Actions, Scoreboard, Players, Settings } from './screens.jsx';
 import { useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakSlider } from './TweaksPanel.jsx';
+import Lobby from './Lobby.jsx';
 
 /* ============================================================
    app.jsx — shell, routing, store subscription, tweaks
    ============================================================ */
-
-// live game state hook (re-renders on store change + 1s clock for "time ago")
-function useGame() {
-  const [, force] = useReducer((x) => x + 1, 0);
-  useEffect(() => {
-    const unsub = GameStore.subscribe(force);
-    const t = setInterval(force, 1000);
-    return () => { unsub(); clearInterval(t); };
-  }, []);
-  return GameStore.getState();
-}
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
@@ -48,10 +38,20 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 function openTweaks() { window.postMessage({ type: '__activate_edit_mode' }, '*'); }
 
 function App() {
-  const state = useGame();
+  const [conn, setConn] = useState(null); // real backend session: { user, session, playerId }
+  const store = useMemo(() => (conn ? createBackendStore(conn) : null), [conn]);
+  const [, force] = useReducer((x) => x + 1, 0);
   const [route, setRoute] = useState({ screen: 'dashboard', params: {} });
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const nav = (screen, params = {}) => setRoute({ screen, params });
+
+  // re-render on store change + a 1s clock for relative "time ago" labels
+  useEffect(() => {
+    if (!store) return undefined;
+    const unsub = store.subscribe(force);
+    const clock = setInterval(force, 1000);
+    return () => { unsub(); clearInterval(clock); store.stop(); };
+  }, [store]);
 
   // apply visual tweaks
   useEffect(() => {
@@ -64,8 +64,12 @@ function App() {
   }, [t.accent, t.fontPair, t.density]);
 
   // apply game-config tweaks to the store
-  useEffect(() => { GameStore.setConfig({ difficulty: t.difficulty, simSpeed: t.simSpeed }); }, [t.difficulty, t.simSpeed]);
+  useEffect(() => { store?.setConfig({ difficulty: t.difficulty, simSpeed: t.simSpeed }); }, [store, t.difficulty, t.simSpeed]);
 
+  // Gate on the real backend lobby. Until the player enters a match, show the connect flow.
+  if (!conn) return <Lobby onEnter={setConn} />;
+
+  const state = store.getState();
   const Screen = SCREENS[route.screen] || Dashboard;
   const activeNav = route.screen === 'incident' ? 'incidents' : route.screen;
   const activeCount = GameSelectors.activeIncidents(state).length;
@@ -102,13 +106,14 @@ function App() {
         <header className="topbar">
           <div className="crumb">{CRUMB[route.screen]}{route.screen === 'incident' && <span className="dim"> · {route.params.id}</span>}</div>
           <div className="spacer" />
-          <div className="chip">GAME <b>{state.game}</b></div>
+          <div className="chip">GAME <b>{conn.session.sessionCode}</b></div>
           <div className="online"><span className="dot" />ONLINE</div>
           <div className="chip" style={{ color: 'var(--accent)', borderColor: 'var(--accent-line)' }}><b>{state.score.toLocaleString()}</b> PTS</div>
           <button className="icon-btn" title="Fullscreen" onClick={() => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }}><Icon name="expand" size={16} /></button>
+          <button className="icon-btn" title="Leave match" onClick={() => setConn(null)}><Icon name="x" size={16} /></button>
         </header>
         <main className="content">
-          <Screen key={route.screen + (route.params.id || '')} state={state} store={GameStore} nav={nav} route={route} openTweaks={openTweaks} />
+          <Screen key={route.screen + (route.params.id || '')} state={state} store={store} nav={nav} route={route} openTweaks={openTweaks} />
         </main>
       </div>
 

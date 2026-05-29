@@ -262,7 +262,7 @@ function IncidentDetail({ state, store, nav, route }) {
   if (!inc) return <div className="empty">Incident not found. <span className="link" onClick={() => nav('incidents')}>Back to list</span></div>;
   const cell = state.cells.find((c) => c.id === inc.cellId);
   const resolved = inc.status === 'resolved';
-  const catalog = ['rebalance', 'restart', 'power', 'rollback', 'ignore'];
+  const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
   const [flash, setFlash] = React.useState(null);
   function apply(aid) { store.applyAction(inc.id, aid); setFlash(aid); }
   return (
@@ -297,8 +297,8 @@ function IncidentDetail({ state, store, nav, route }) {
             </div>
             <div style={{ marginTop: 14 }}>
               <div className="k" style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>Live Metrics</div>
-              {metricRow('CPU Usage', inc.metrics.cpu, '%', 100)}
-              {metricRow('User Load', inc.metrics.userLoad, '%', 130)}
+              {metricRow('Signal Quality', inc.metrics.signalQuality, '%', 100)}
+              {metricRow('User Load', inc.metrics.userLoad, '%', 100)}
               {metricRow('Latency', inc.metrics.latency, 'ms', 200)}
               {metricRow('Packet Loss', inc.metrics.packetLoss, '%', 40)}
             </div>
@@ -318,7 +318,6 @@ function IncidentDetail({ state, store, nav, route }) {
                     <div className="at">{a.name}{rec && <span className="pts-pill">★ recommended</span>}</div>
                     <div className="ad">{a.desc}</div>
                   </div>
-                  <span className={'pts ' + (a.points >= 0 ? 'pos' : 'neg')} style={{ fontSize: 11, marginRight: 4 }}>{a.points > 0 ? '+' : ''}{a.points}</span>
                   <button className={'btn' + (rec && !resolved ? ' primary' : '')} disabled={resolved} onClick={() => apply(aid)}>Apply</button>
                 </div>
               );
@@ -347,10 +346,8 @@ function Actions({ state, store, nav }) {
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ fontFamily: 'var(--font-head)', fontWeight: 600, fontSize: 15 }}>{a.name}</span>
-                <span className={'pts ' + (a.points >= 0 ? 'pos' : 'neg')}>{a.points > 0 ? '+' : ''}{a.points} pts</span>
               </div>
               <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 4 }}>{a.desc}</div>
-              {a.heal > 0 && <div className="tag good" style={{ marginTop: 8 }}>+{a.heal}% cell health</div>}
             </div>
           </div>
         ))}
