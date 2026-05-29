@@ -12,11 +12,14 @@ import com.oran.defender.model.Action;
 import com.oran.defender.model.GameSession.SessionStatus;
 import com.oran.defender.model.Incident;
 import com.oran.defender.model.Incident.IncidentStatus;
+import com.oran.defender.model.NetworkCell;
+import com.oran.defender.model.NetworkCell.HealthStatus;
 import com.oran.defender.model.Player;
 import com.oran.defender.model.PlayerAction;
 import com.oran.defender.model.PlayerAction.ActionResult;
 import com.oran.defender.repository.ActionRepository;
 import com.oran.defender.repository.IncidentRepository;
+import com.oran.defender.repository.NetworkCellRepository;
 import com.oran.defender.repository.PlayerActionRepository;
 import com.oran.defender.repository.PlayerRepository;
 import java.time.Duration;
@@ -32,6 +35,7 @@ public class IncidentService {
     private final PlayerRepository playerRepository;
     private final ActionRepository actionRepository;
     private final PlayerActionRepository playerActionRepository;
+    private final NetworkCellRepository cellRepository;
     private final IncidentEvaluator incidentEvaluator;
     private final ScoreCalculator scoreCalculator;
     private final ScoreService scoreService;
@@ -40,6 +44,7 @@ public class IncidentService {
                            PlayerRepository playerRepository,
                            ActionRepository actionRepository,
                            PlayerActionRepository playerActionRepository,
+                           NetworkCellRepository cellRepository,
                            IncidentEvaluator incidentEvaluator,
                            ScoreCalculator scoreCalculator,
                            ScoreService scoreService) {
@@ -47,6 +52,7 @@ public class IncidentService {
         this.playerRepository = playerRepository;
         this.actionRepository = actionRepository;
         this.playerActionRepository = playerActionRepository;
+        this.cellRepository = cellRepository;
         this.incidentEvaluator = incidentEvaluator;
         this.scoreCalculator = scoreCalculator;
         this.scoreService = scoreService;
@@ -154,16 +160,39 @@ public class IncidentService {
             case CORRECT -> {
                 incident.setStatus(IncidentStatus.RESOLVED);
                 incident.setResolvedAt(Instant.now());
+                healCell(incident.getCell());
             }
             case HARMFUL -> {
                 incident.setStatus(IncidentStatus.FAILED);
                 incident.setResolvedAt(Instant.now());
+                worsenCell(incident.getCell());
             }
             case INEFFECTIVE -> {
                 // No change: the incident stays OPEN so the player can try a different action.
             }
         }
         incidentRepository.save(incident);
+    }
+
+    /** A correct fix restores the cell so the map/health reflects the win. */
+    private void healCell(NetworkCell cell) {
+        cell.setSignalQuality(95.0);
+        cell.setUserLoad(30.0);
+        cell.setLatency(25.0);
+        cell.setPacketLoss(1.0);
+        cell.setAlarmCount(0);
+        cell.setHealthStatus(HealthStatus.GOOD);
+        cellRepository.save(cell);
+    }
+
+    /** A trap makes things worse — the cell degrades and the player sees the cost. */
+    private void worsenCell(NetworkCell cell) {
+        cell.setUserLoad(Math.min(100.0, cell.getUserLoad() + 10.0));
+        cell.setLatency(cell.getLatency() + 30.0);
+        cell.setPacketLoss(Math.min(100.0, cell.getPacketLoss() + 5.0));
+        cell.setAlarmCount(cell.getAlarmCount() + 2);
+        cell.setHealthStatus(HealthStatus.CRITICAL);
+        cellRepository.save(cell);
     }
 
     private ActionResult toActionResult(EvaluationResult verdict) {
