@@ -11,6 +11,7 @@ relative prefix **`/api`** (the Vite dev server proxies `/api` → `:8080`, so n
 | Field | Values |
 |-------|--------|
 | session `status` | `WAITING`, `ACTIVE`, `ENDED` |
+| session `difficulty` | `EASY` (3 towers), `MEDIUM` (6), `HARD` (9) |
 | incident `status` | `OPEN`, `RESOLVED`, `FAILED` |
 | `severity` | `LOW`, `MEDIUM`, `HIGH` |
 | cell `healthStatus` | `GOOD`, `WARNING`, `CRITICAL` |
@@ -60,15 +61,16 @@ Logs in by username, registering on first use (no "name taken" error). **Request
 ## Sessions
 
 ### `POST /api/sessions`
-**Request:** (`durationSeconds` optional, defaults server-side; must be positive)
+**Request:** (`durationSeconds` optional positive int; `difficulty` optional — `EASY`/`MEDIUM`/`HARD` → 3/6/9 towers, defaults `MEDIUM`)
 ```json
-{ "name": "Friday match", "createdByUserId": 1, "durationSeconds": 600 }
+{ "name": "Friday match", "createdByUserId": 1, "durationSeconds": 600, "difficulty": "MEDIUM" }
 ```
 **Response 201 (`SessionResponse`):**
 ```json
 {
   "id": 5, "sessionCode": "L5Y9FS", "name": "Friday match", "status": "WAITING",
-  "durationSeconds": 600, "startedAt": null, "endedAt": null, "createdByUserId": 1
+  "durationSeconds": 600, "difficulty": "MEDIUM",
+  "startedAt": null, "endedAt": null, "createdByUserId": 1
 }
 ```
 
