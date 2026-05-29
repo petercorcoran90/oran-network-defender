@@ -53,12 +53,18 @@ export const Api = {
   getPlayers: (id) => request(`/sessions/${id}/players`),
 
   // --- network cells ---
-  getCells: (sessionId) => request(`/sessions/${sessionId}/cells`),
+  getCells: (sessionId, playerId) =>
+    request(`/sessions/${sessionId}/cells${playerId != null ? `?playerId=${playerId}` : ''}`),
   getCell: (sessionId, cellId) => request(`/sessions/${sessionId}/cells/${cellId}`),
 
   // --- incidents ---
-  getIncidents: (sessionId, status) =>
-    request(`/sessions/${sessionId}/incidents${status ? `?status=${encodeURIComponent(status)}` : ''}`),
+  getIncidents: (sessionId, playerId, status) => {
+    const q = new URLSearchParams();
+    if (playerId != null) q.set('playerId', playerId);
+    if (status) q.set('status', status);
+    const qs = q.toString();
+    return request(`/sessions/${sessionId}/incidents${qs ? `?${qs}` : ''}`);
+  },
   getIncident: (sessionId, incidentId) =>
     request(`/sessions/${sessionId}/incidents/${incidentId}`),
   submitAction: (sessionId, incidentId, playerId, actionId) =>
