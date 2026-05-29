@@ -3,7 +3,6 @@ package com.oran.defender.service;
 import com.oran.defender.exception.ConflictException;
 import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
-import com.oran.defender.game.GameInitializer;
 import com.oran.defender.model.AppUser;
 import com.oran.defender.model.GameSession;
 import com.oran.defender.model.GameSession.SessionStatus;
@@ -31,17 +30,14 @@ public class SessionService {
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
     private final AppUserRepository userRepository;
-    private final GameInitializer gameInitializer;
     private final SecureRandom random = new SecureRandom();
 
     public SessionService(GameSessionRepository sessionRepository,
                           PlayerRepository playerRepository,
-                          AppUserRepository userRepository,
-                          GameInitializer gameInitializer) {
+                          AppUserRepository userRepository) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.userRepository = userRepository;
-        this.gameInitializer = gameInitializer;
     }
 
     @Transactional
@@ -139,12 +135,14 @@ public class SessionService {
         return playerRepository.findByGameSessionIdOrderByScoreDesc(sessionId);
     }
 
-    /** Flip to ACTIVE, persist, then seed both players' networks + incidents. */
+    /**
+     * Flip the match to ACTIVE. The network + incidents are seeded by the Python simulator,
+     * which polls for ACTIVE sessions and POSTs them in — so a session is briefly empty until
+     * the simulator picks it up.
+     */
     private void activate(GameSession session) {
         transitionToActive(session);
         sessionRepository.save(session);
-        gameInitializer.setUpNetwork(session,
-                playerRepository.findByGameSessionIdOrderByScoreDesc(session.getId()));
     }
 
     private void transitionToActive(GameSession session) {
