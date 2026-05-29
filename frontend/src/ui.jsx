@@ -1,5 +1,6 @@
 import React from 'react';
 import { statusOf } from './store.js';
+import { NetworkMap } from './NetworkMap3D.jsx';
 
 /* ============================================================
    ui.jsx — shared UI primitives for O-RAN Network Defender
@@ -58,34 +59,6 @@ function StatusTag({ status }) {
   return <span className={'tag ' + (map[status] || 'muted')}>{status}</span>;
 }
 
-// ---------- network map ----------
-function NetworkMap({ cells, links, selectedId, onSelect, height = 460 }) {
-  const byId = Object.fromEntries(cells.map((c) => [c.id, c]));
-  return (
-    <div className="map-wrap" style={{ height }}>
-      <svg className="map-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-        {links.map(([a, b], i) => {
-          const p = byId[a], q = byId[b];
-          if (!p || !q) return null;
-          return <line key={i} x1={p.x} y1={p.y} x2={q.x} y2={q.y}
-            stroke="rgba(120,200,150,.22)" strokeWidth=".35" strokeDasharray="1.2 1.4" vectorEffect="non-scaling-stroke" />;
-        })}
-      </svg>
-      {cells.map((c) => {
-        const st = statusOf(c.health);
-        return (
-          <div key={c.id} className={'node n-' + st + (selectedId === c.id ? ' sel' : '')}
-            style={{ left: c.x + '%', top: c.y + '%' }} onClick={() => onSelect && onSelect(c.id)}>
-            <div className="hex"><Icon name="tower" size={22} style={{ color: STATUS_COLOR[st] }} /></div>
-            <div className="nm">{c.id}</div>
-            <div className="pct">{c.health}%</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function MapLegend() {
   return (
     <div className="legend">
@@ -137,3 +110,4 @@ function Topology({ cells, height = 360 }) {
 }
 
 export { Icon, timeAgo, SevTag, StatusTag, NetworkMap, MapLegend, Topology, SEV_KIND, STATUS_COLOR };
+
