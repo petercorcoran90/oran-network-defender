@@ -51,6 +51,31 @@ function seededUnit(str, salt) {
 }
 const clampPct = (v) => Math.max(8, Math.min(92, v));
 
+// Deterministic scatter: place towers at seeded random spots, rejecting positions too close
+// to already-placed ones. Looks organic (no grid) and is stable across polls because it's
+// driven only by the (sorted) cell names.
+function scatterPositions(names) {
+  const n = names.length || 1;
+  const margin = 14;
+  const span = 100 - margin * 2;
+  const minDist = Math.max(14, (span / Math.sqrt(n)) * 0.55);
+  const placed = [];
+  names.forEach((name) => {
+    let chosen = null;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const x = margin + seededUnit(name, attempt * 2 + 1) * span;
+      const y = margin + seededUnit(name, attempt * 2 + 2) * span;
+      if (!chosen) chosen = { x, y };
+      if (placed.every((p) => Math.hypot(p.x - x, p.y - y) >= minDist)) {
+        chosen = { x, y };
+        break;
+      }
+    }
+    placed.push(chosen);
+  });
+  return placed;
+}
+
 // ---- selectors (pure, derived) — unchanged API for the screens ----
 export const Selectors = {
   networkHealth(s) {
@@ -89,25 +114,17 @@ export function createBackendStore(conn) {
 
   function buildState(session, players, cells, incidents, events) {
     const sorted = [...cells].sort((a, b) => a.cellName.localeCompare(b.cellName));
-    const n = sorted.length || 1;
-    const cols = Math.min(3, n);
-    const rows = Math.max(1, Math.ceil(n / cols));
     const nameById = {};
+    const positions = scatterPositions(sorted.map((c) => c.cellName));
     const uiCells = sorted.map((c, i) => {
       nameById[c.id] = c.cellName;
-      // Jittered grid: spread the towers out and break up the rigid rows/columns,
-      // but keep it deterministic per cell so they don't teleport between polls.
-      const gx = ((i % cols) + 1) / (cols + 1) * 100;
-      const gy = (Math.floor(i / cols) + 1) / (rows + 1) * 100;
-      const jx = (seededUnit(c.cellName, 1) - 0.5) * (100 / (cols + 1)) * 0.85;
-      const jy = (seededUnit(c.cellName, 2) - 0.5) * (100 / (rows + 1)) * 0.85;
       return {
         id: c.cellName,
         backendId: c.id,
         health: HEALTH[c.healthStatus] ?? 70,
         users: Math.round(c.userLoad * 10),
-        x: clampPct(gx + jx),
-        y: clampPct(gy + jy),
+        x: clampPct(positions[i].x),
+        y: clampPct(positions[i].y),
         signalQuality: c.signalQuality,
         userLoad: c.userLoad,
         latency: c.latency,
