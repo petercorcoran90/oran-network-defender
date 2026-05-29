@@ -1,23 +1,17 @@
-# Test profile — activate with @ActiveProfiles("test") on any test that touches the database.
-# Uses an in-memory H2 database so tests never touch the MySQL production database.
 spring:
   datasource:
-    url: jdbc:h2:mem:orandb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
-    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:oran_test;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
     username: sa
-    password: ""
+    password:
+    driver-class-name: org.h2.Driver
   jpa:
     hibernate:
-      # Build the schema fresh from the entities for each test context, then drop it.
       ddl-auto: create-drop
-    show-sql: true
-    # Run data.sql AFTER Hibernate has created the tables (not before).
     defer-datasource-initialization: true
     properties:
       hibernate:
-        # Override the MySQL dialect inherited from the base application.yml.
         dialect: org.hibernate.dialect.H2Dialect
-  # Re-enable script init (the base config sets this to 'never' for production).
+    show-sql: false
   sql:
     init:
       mode: always
