@@ -137,7 +137,7 @@ export function createBackendStore(conn) {
 
     const activity = [...events]
       .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-      .map((e) => ({ id: 'e' + e.id, kind: e.points > 0 ? 'apply' : 'incident', text: e.reason, points: e.points, when: Date.parse(e.createdAt) }));
+      .map((e) => ({ id: 'e' + e.id, kind: e.points > 0 ? 'apply' : 'incident', text: e.reason, points: e.points, when: Date.parse(e.createdAt), playerId: e.playerId }));
 
     return {
       game: session.sessionCode,

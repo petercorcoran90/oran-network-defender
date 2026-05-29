@@ -4,6 +4,7 @@ import { Icon } from './ui.jsx';
 import { Dashboard, NetworkMapPage, Incidents, IncidentDetail, Actions, Scoreboard, Players, Settings } from './screens.jsx';
 import { useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakSlider } from './TweaksPanel.jsx';
 import Lobby from './Lobby.jsx';
+import GameOver from './GameOver.jsx';
 
 /* ============================================================
    app.jsx — shell, routing, store subscription, tweaks
@@ -70,6 +71,10 @@ function App() {
   if (!conn) return <Lobby onEnter={setConn} />;
 
   const state = store.getState();
+
+  // When the timer runs out (server flips the session to ENDED), show the summary.
+  if (state.sessionStatus === 'ENDED') return <GameOver state={state} onExit={() => setConn(null)} />;
+
   const Screen = SCREENS[route.screen] || Dashboard;
   const activeNav = route.screen === 'incident' ? 'incidents' : route.screen;
   const activeCount = GameSelectors.activeIncidents(state).length;
