@@ -29,6 +29,11 @@ public class NetworkCell {
     @JoinColumn(name = "game_session_id", nullable = false)
     private GameSession gameSession;
 
+    // Head-to-head: each player owns their own mirrored copy of every cell.
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "player_id", nullable = false)
+    private Player player;
+
     @Column(name = "cell_name", nullable = false, length = 80)
     private String cellName;
 

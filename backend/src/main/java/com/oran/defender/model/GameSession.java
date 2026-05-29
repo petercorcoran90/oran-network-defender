@@ -36,6 +36,11 @@ public class GameSession {
     @Column(nullable = false, length = 16)
     private SessionStatus status = SessionStatus.WAITING;
 
+    // Match length in seconds, chosen by the creator. The session ends when
+    // started_at + duration_seconds has elapsed; highest score at that point wins.
+    @Column(name = "duration_seconds", nullable = false)
+    private Integer durationSeconds = 300;
+
     @Column(name = "started_at")
     private Instant startedAt;
 

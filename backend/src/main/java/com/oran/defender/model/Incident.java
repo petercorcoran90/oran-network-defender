@@ -30,6 +30,14 @@ public class Incident {
     @JoinColumn(name = "game_session_id", nullable = false)
     private GameSession gameSession;
 
+    // Head-to-head: incidents are mirrored per player. Both players get the same
+    // incidentType/severity/rootCause on the same cell, but as separate rows they
+    // resolve independently. The owning player is denormalised here so "this player's
+    // incidents" is a single indexed lookup (it also matches cell.player).
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "player_id", nullable = false)
+    private Player player;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cell_id", nullable = false)
     private NetworkCell cell;
