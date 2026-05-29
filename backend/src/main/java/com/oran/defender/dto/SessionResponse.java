@@ -10,6 +10,7 @@ public record SessionResponse(
         String name,
         String status,
         Integer durationSeconds,
+        String difficulty,
         Instant startedAt,
         Instant endedAt,
         Long createdByUserId
@@ -21,6 +22,7 @@ public record SessionResponse(
                 s.getName(),
                 s.getStatus().name(),
                 s.getDurationSeconds(),
+                s.getDifficulty().name(),
                 s.getStartedAt(),
                 s.getEndedAt(),
                 s.getCreatedByUser() != null ? s.getCreatedByUser().getId() : null);

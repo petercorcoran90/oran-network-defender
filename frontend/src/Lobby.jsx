@@ -38,6 +38,7 @@ export default function Lobby({ onEnter }) {
   // create form
   const [matchName, setMatchName] = useState('');
   const [duration, setDuration] = useState(300);
+  const [difficulty, setDifficulty] = useState('MEDIUM');
 
   // join
   const [sessions, setSessions] = useState([]);
@@ -72,7 +73,7 @@ export default function Lobby({ onEnter }) {
   // --- create + auto-join as the creator ---
   async function createMatch() {
     await run(async () => {
-      const s = await Api.createSession(matchName.trim() || `${user.username}'s match`, user.id, Number(duration));
+      const s = await Api.createSession(matchName.trim() || `${user.username}'s match`, user.id, Number(duration), difficulty);
       const me = await Api.joinSession(s.id, user.id, user.username);
       setSession(s); setPlayerId(me.id); setStep('room');
     }).catch(() => {});
@@ -165,6 +166,13 @@ export default function Lobby({ onEnter }) {
                 </Field>
                 <Field label="Duration (seconds)">
                   <input style={inputStyle} type="number" min={30} value={duration} onChange={(e) => setDuration(e.target.value)} />
+                </Field>
+                <Field label="Difficulty">
+                  <div className="seg" style={{ width: '100%' }}>
+                    {[['EASY', 'Easy · 3'], ['MEDIUM', 'Medium · 6'], ['HARD', 'Hard · 9']].map(([v, l]) => (
+                      <button key={v} type="button" className={difficulty === v ? 'on' : ''} style={{ flex: 1 }} onClick={() => setDifficulty(v)}>{l}</button>
+                    ))}
+                  </div>
                 </Field>
                 <button className="btn primary" disabled={busy} onClick={createMatch}>{busy ? 'Working…' : 'Create match'}</button>
               </div>

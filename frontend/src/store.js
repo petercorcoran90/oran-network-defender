@@ -40,6 +40,17 @@ const ACTION_ICON = {
 const prettyName = (name) =>
   name.toLowerCase().split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
+// Stable per-cell pseudo-random in [0,1] (FNV-1a) — lets us scatter towers without them
+// jumping around on every poll.
+function seededUnit(str, salt) {
+  let h = (2166136261 ^ salt) >>> 0;
+  for (let i = 0; i < str.length; i += 1) {
+    h = Math.imul(h ^ str.charCodeAt(i), 16777619) >>> 0;
+  }
+  return (h >>> 0) / 4294967295;
+}
+const clampPct = (v) => Math.max(8, Math.min(92, v));
+
 // ---- selectors (pure, derived) — unchanged API for the screens ----
 export const Selectors = {
   networkHealth(s) {
@@ -84,13 +95,19 @@ export function createBackendStore(conn) {
     const nameById = {};
     const uiCells = sorted.map((c, i) => {
       nameById[c.id] = c.cellName;
+      // Jittered grid: spread the towers out and break up the rigid rows/columns,
+      // but keep it deterministic per cell so they don't teleport between polls.
+      const gx = ((i % cols) + 1) / (cols + 1) * 100;
+      const gy = (Math.floor(i / cols) + 1) / (rows + 1) * 100;
+      const jx = (seededUnit(c.cellName, 1) - 0.5) * (100 / (cols + 1)) * 0.85;
+      const jy = (seededUnit(c.cellName, 2) - 0.5) * (100 / (rows + 1)) * 0.85;
       return {
         id: c.cellName,
         backendId: c.id,
         health: HEALTH[c.healthStatus] ?? 70,
         users: Math.round(c.userLoad * 10),
-        x: ((i % cols) + 1) / (cols + 1) * 100,
-        y: (Math.floor(i / cols) + 1) / (rows + 1) * 100,
+        x: clampPct(gx + jx),
+        y: clampPct(gy + jy),
         signalQuality: c.signalQuality,
         userLoad: c.userLoad,
         latency: c.latency,

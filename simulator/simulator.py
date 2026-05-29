@@ -30,6 +30,8 @@ BACKEND = os.environ.get("BACKEND_URL", "http://localhost:8080").rstrip("/")
 TOKEN = os.environ.get("SIM_INGEST_TOKEN", "")
 POLL_SECONDS = float(os.environ.get("POLL_SECONDS", "3"))
 CELL_COUNT = int(os.environ.get("CELL_COUNT", "6"))
+# Difficulty (set on the session at creation) -> number of towers.
+DIFFICULTY_CELLS = {"EASY": 3, "MEDIUM": 6, "HARD": 9}
 DRIFT_EVERY = int(os.environ.get("DRIFT_EVERY_TICKS", "2"))
 MAX_INCIDENT_CELLS = int(os.environ.get("MAX_INCIDENT_CELLS", "5"))
 # Difficulty ramp: new incidents arrive this many ticks apart early -> late in the match.
@@ -142,11 +144,12 @@ def cell_spec(name, m):
             "energyUsage": m["energyUsage"], "healthStatus": m["healthStatus"]}
 
 
-def build_plan(session_id):
-    """Deterministic per session: a few easy incidents to open the match."""
+def build_plan(session_id, cell_count):
+    """Deterministic per session: towers + a few easy incidents to open the match."""
     rng = random.Random(session_id)
-    names = ["Cell-%02d" % (i + 1) for i in range(CELL_COUNT)]
-    incident_idx = rng.sample(range(CELL_COUNT), k=min(INITIAL_INCIDENTS, CELL_COUNT))
+    names = ["Cell-%02d" % (i + 1) for i in range(cell_count)]
+    n_inc = min(INITIAL_INCIDENTS, max(1, cell_count - 1))
+    incident_idx = rng.sample(range(cell_count), k=n_inc)
     incidents = [(i, rng.choice(EARLY_KEYS)) for i in incident_idx]
     return names, incidents
 
@@ -156,7 +159,8 @@ def seed_session(session):
     players = get("/api/sessions/%d/players" % sid)
     if len(players) < 2:
         return
-    names, incidents = build_plan(sid)
+    cell_count = DIFFICULTY_CELLS.get(session.get("difficulty", "MEDIUM"), CELL_COUNT)
+    names, incidents = build_plan(sid, cell_count)
     canonical = {n: healthy_metrics() for n in names}
     for idx, rc in incidents:
         apply_symptom(canonical[names[idx]], rc)

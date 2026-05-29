@@ -41,7 +41,7 @@ public class SessionService {
     }
 
     @Transactional
-    public GameSession createSession(String name, Long createdByUserId, Integer durationSeconds) {
+    public GameSession createSession(String name, Long createdByUserId, Integer durationSeconds, String difficulty) {
         AppUser creator = userRepository.findById(createdByUserId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
         GameSession session = new GameSession();
@@ -50,7 +50,19 @@ public class SessionService {
         session.setCreatedByUser(creator);
         session.setStatus(SessionStatus.WAITING);
         session.setDurationSeconds(durationSeconds != null ? durationSeconds : DEFAULT_DURATION_SECONDS);
+        session.setDifficulty(parseDifficulty(difficulty));
         return sessionRepository.save(session);
+    }
+
+    private GameSession.Difficulty parseDifficulty(String value) {
+        if (value == null || value.isBlank()) {
+            return GameSession.Difficulty.MEDIUM;
+        }
+        try {
+            return GameSession.Difficulty.valueOf(value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidActionException("Unknown difficulty: " + value);
+        }
     }
 
     @Transactional(readOnly = true)

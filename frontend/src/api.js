@@ -43,8 +43,8 @@ export const Api = {
   getUser: (id) => request(`/users/${id}`),
 
   // --- sessions ---
-  createSession: (name, createdByUserId, durationSeconds) =>
-    request('/sessions', { method: 'POST', body: { name, createdByUserId, durationSeconds } }),
+  createSession: (name, createdByUserId, durationSeconds, difficulty) =>
+    request('/sessions', { method: 'POST', body: { name, createdByUserId, durationSeconds, difficulty } }),
   listSessions: () => request('/sessions'),
   getSession: (id) => request(`/sessions/${id}`),
   joinSession: (id, userId, teamName) =>

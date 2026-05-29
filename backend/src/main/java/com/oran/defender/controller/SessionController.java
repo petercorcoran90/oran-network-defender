@@ -25,7 +25,8 @@ public class SessionController {
     // durationSeconds is optional; when omitted the service applies a default match length.
     record CreateSessionRequest(@NotBlank String name,
                                 @NotNull Long createdByUserId,
-                                @Positive Integer durationSeconds) {}
+                                @Positive Integer durationSeconds,
+                                String difficulty) {}
     record JoinSessionRequest(@NotNull Long userId, String teamName) {}
     record ReadyRequest(@NotNull Long playerId) {}
 
@@ -33,7 +34,7 @@ public class SessionController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public SessionResponse createSession(@Valid @RequestBody CreateSessionRequest req) {
-        return SessionResponse.from(sessionService.createSession(req.name(), req.createdByUserId(), req.durationSeconds()));
+        return SessionResponse.from(sessionService.createSession(req.name(), req.createdByUserId(), req.durationSeconds(), req.difficulty()));
     }
 
     // List all sessions with status WAITING or ACTIVE

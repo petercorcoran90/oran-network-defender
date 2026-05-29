@@ -41,6 +41,12 @@ public class GameSession {
     @Column(name = "duration_seconds", nullable = false)
     private Integer durationSeconds = 300;
 
+    // Chosen by the creator; the simulator maps this to a tower count (EASY 3 / MEDIUM 6 / HARD 9).
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    @org.hibernate.annotations.ColumnDefault("'MEDIUM'")
+    private Difficulty difficulty = Difficulty.MEDIUM;
+
     @Column(name = "started_at")
     private Instant startedAt;
 
@@ -55,5 +61,11 @@ public class GameSession {
         WAITING,
         ACTIVE,
         ENDED
+    }
+
+    public enum Difficulty {
+        EASY,
+        MEDIUM,
+        HARD
     }
 }
