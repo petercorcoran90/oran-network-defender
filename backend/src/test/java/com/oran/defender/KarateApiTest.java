@@ -15,6 +15,6 @@ class KarateApiTest {
     @Karate.Test
     Karate api() {
         System.setProperty("karate.baseUrl", "http://localhost:" + port);
-        return Karate.run("classpath:com/oran/defender/api/session-flow.feature");
+        return Karate.run("classpath:com/oran/defender/api");
     }
 }
