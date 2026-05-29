@@ -10,8 +10,10 @@ import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.Action;
 import com.oran.defender.model.GameSession.SessionStatus;
+import com.oran.defender.model.GameSession;
 import com.oran.defender.model.Incident;
 import com.oran.defender.model.Incident.IncidentStatus;
+import com.oran.defender.model.Incident.Severity;
 import com.oran.defender.model.NetworkCell;
 import com.oran.defender.model.NetworkCell.HealthStatus;
 import com.oran.defender.model.Player;
@@ -24,7 +26,10 @@ import com.oran.defender.repository.PlayerActionRepository;
 import com.oran.defender.repository.PlayerRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -166,6 +171,7 @@ public class IncidentService {
                 incident.setStatus(IncidentStatus.FAILED);
                 incident.setResolvedAt(Instant.now());
                 worsenCell(incident.getCell());
+                cascade(incident); // a bad call ripples into neighbouring cells
             }
             case INEFFECTIVE -> {
                 // No change: the incident stays OPEN so the player can try a different action.
@@ -193,6 +199,77 @@ public class IncidentService {
         cell.setAlarmCount(cell.getAlarmCount() + 2);
         cell.setHealthStatus(HealthStatus.CRITICAL);
         cellRepository.save(cell);
+    }
+
+    private static final String CASCADE_TYPE = "Cascade Overload";
+    private static final String CASCADE_DESC =
+            "Traffic from a downed neighbouring cell has overloaded this one.";
+
+    /**
+     * Knock-on effect: a crashed cell drags its two adjacent cells (by name order) toward
+     * trouble. A neighbour with no open incident gets a new, solvable "Cascade Overload"
+     * (root cause CELL_OVERLOAD → fix with Rebalance Traffic); a neighbour already in trouble
+     * just degrades further. Only affects the acting player's own network.
+     */
+    private void cascade(Incident source) {
+        Player player = source.getPlayer();
+        NetworkCell crashed = source.getCell();
+        List<NetworkCell> cells = cellRepository.findByPlayerId(player.getId());
+        if (cells.size() < 2) {
+            return;
+        }
+        cells.sort(Comparator.comparing(NetworkCell::getCellName));
+        int idx = -1;
+        for (int i = 0; i < cells.size(); i++) {
+            if (cells.get(i).getId().equals(crashed.getId())) {
+                idx = i;
+                break;
+            }
+        }
+        if (idx < 0) {
+            return;
+        }
+        Set<Long> cellsWithOpenIncident = incidentRepository
+                .findByPlayerIdAndStatus(player.getId(), IncidentStatus.OPEN).stream()
+                .map(i -> i.getCell().getId()).collect(Collectors.toSet());
+
+        int n = cells.size();
+        for (int delta : new int[]{-1, 1}) {
+            NetworkCell neighbour = cells.get((idx + delta + n) % n);
+            if (neighbour.getId().equals(crashed.getId())) {
+                continue;
+            }
+            if (cellsWithOpenIncident.contains(neighbour.getId())) {
+                neighbour.setUserLoad(Math.min(100.0, neighbour.getUserLoad() + 10.0));
+                neighbour.setLatency(neighbour.getLatency() + 20.0);
+                if (neighbour.getHealthStatus() == HealthStatus.GOOD) {
+                    neighbour.setHealthStatus(HealthStatus.WARNING);
+                }
+                cellRepository.save(neighbour);
+            } else {
+                spawnCascadeIncident(source.getGameSession(), player, neighbour);
+                cellsWithOpenIncident.add(neighbour.getId());
+            }
+        }
+    }
+
+    private void spawnCascadeIncident(GameSession session, Player player, NetworkCell cell) {
+        cell.setUserLoad(90.0);
+        cell.setLatency(150.0);
+        cell.setHealthStatus(HealthStatus.WARNING);
+        cellRepository.save(cell);
+
+        Incident incident = new Incident();
+        incident.setGameSession(session);
+        incident.setPlayer(player);
+        incident.setCell(cell);
+        incident.setIncidentType(CASCADE_TYPE);
+        incident.setSeverity(Severity.HIGH);
+        incident.setStatus(IncidentStatus.OPEN);
+        incident.setDescription(CASCADE_DESC);
+        incident.setRootCause(RootCause.CELL_OVERLOAD.name());
+        incident.setCreatedAt(Instant.now());
+        incidentRepository.save(incident);
     }
 
     private ActionResult toActionResult(EvaluationResult verdict) {

@@ -62,6 +62,7 @@ function emptyState(conn) {
     cells: [], links: [], incidents: [], activity: [],
     players: [], teams: [],
     sessionStatus: conn.session.status,
+    endsAt: conn.session.endedAt ? Date.parse(conn.session.endedAt) : null,
     config: { difficulty: 'normal', simSpeed: 1 },
     version: 0,
   };
@@ -145,6 +146,7 @@ export function createBackendStore(conn) {
       cells: uiCells, links, incidents: uiIncidents, activity,
       players: uiPlayers, teams: uiTeams,
       sessionStatus: session.status,
+      endsAt: session.endedAt ? Date.parse(session.endedAt) : null,
       config: state.config,
       version: state.version + 1,
     };

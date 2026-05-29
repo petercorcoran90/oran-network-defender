@@ -24,14 +24,18 @@ import random
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 BACKEND = os.environ.get("BACKEND_URL", "http://localhost:8080").rstrip("/")
 TOKEN = os.environ.get("SIM_INGEST_TOKEN", "")
 POLL_SECONDS = float(os.environ.get("POLL_SECONDS", "3"))
 CELL_COUNT = int(os.environ.get("CELL_COUNT", "6"))
 DRIFT_EVERY = int(os.environ.get("DRIFT_EVERY_TICKS", "2"))
-NEW_INCIDENT_EVERY = int(os.environ.get("NEW_INCIDENT_EVERY_TICKS", "8"))
 MAX_INCIDENT_CELLS = int(os.environ.get("MAX_INCIDENT_CELLS", "5"))
+# Difficulty ramp: new incidents arrive this many ticks apart early -> late in the match.
+SPAWN_TICKS_EARLY = int(os.environ.get("SPAWN_TICKS_EARLY", "4"))
+SPAWN_TICKS_LATE = int(os.environ.get("SPAWN_TICKS_LATE", "1"))
+INITIAL_INCIDENTS = int(os.environ.get("INITIAL_INCIDENTS", "2"))
 
 # rootCause -> how it presents. rootCause values must match the backend RootCause enum.
 ARCHETYPES = {
@@ -54,6 +58,10 @@ DESCRIPTIONS = {
     "ROGUE_AUTOMATION": "An automation loop is making changes that keep degrading this cell.",
     "FALSE_ALARM": "An alert fired but this cell's metrics look healthy.",
 }
+
+# Difficulty pools: easier root causes early; the full set (incl. HIGH severity) later.
+EARLY_KEYS = [k for k, v in ARCHETYPES.items() if v["severity"] in ("LOW", "MEDIUM")]
+ALL_KEYS = list(ARCHETYPES)
 
 # in-memory state per session: { cells: {name: metrics}, players: {pid: {name: cellId}},
 #                                incident_cells: set(name), rng, tick }
@@ -95,6 +103,23 @@ def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
 
+def _parse_ts(ts):
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def elapsed_fraction(session):
+    """How far through the match we are, 0.0 -> 1.0, from started_at/ended_at."""
+    try:
+        start = _parse_ts(session["startedAt"])
+        end = _parse_ts(session["endedAt"])
+        total = (end - start).total_seconds()
+        if total <= 0:
+            return 0.0
+        return clamp((datetime.now(timezone.utc) - start).total_seconds() / total, 0.0, 1.0)
+    except Exception:
+        return 0.0
+
+
 def derive_health(m):
     if m["userLoad"] > 85 or m["latency"] > 150 or m["packetLoss"] > 15:
         return "CRITICAL"
@@ -118,12 +143,11 @@ def cell_spec(name, m):
 
 
 def build_plan(session_id):
-    """Deterministic per session: which cells start with which incident."""
+    """Deterministic per session: a few easy incidents to open the match."""
     rng = random.Random(session_id)
     names = ["Cell-%02d" % (i + 1) for i in range(CELL_COUNT)]
-    keys = list(ARCHETYPES)
-    incident_idx = rng.sample(range(CELL_COUNT), k=min(4, CELL_COUNT))
-    incidents = [(i, rng.choice(keys)) for i in incident_idx]
+    incident_idx = rng.sample(range(CELL_COUNT), k=min(INITIAL_INCIDENTS, CELL_COUNT))
+    incidents = [(i, rng.choice(EARLY_KEYS)) for i in incident_idx]
     return names, incidents
 
 
@@ -182,11 +206,13 @@ def push_metrics(sid, state, name):
             post("/api/internal/cells/%d/metrics" % cell_id, cell_spec(name, m))
 
 
-def tick_session(sid):
+def tick_session(session):
+    sid = session["id"]
     state = SESSIONS[sid]
     rng = state["rng"]
     state["tick"] += 1
     tick = state["tick"]
+    frac = elapsed_fraction(session)
 
     if tick % DRIFT_EVERY == 0:
         for name in state["cells"]:
@@ -195,11 +221,15 @@ def tick_session(sid):
             drift(state["cells"][name], rng)
             push_metrics(sid, state, name)
 
-    if tick % NEW_INCIDENT_EVERY == 0 and len(state["incident_cells"]) < MAX_INCIDENT_CELLS:
+    # Difficulty ramp: incidents arrive further apart early, faster late; harder root
+    # causes (HIGH severity) only come into the pool past the midpoint.
+    interval = max(SPAWN_TICKS_LATE, round(SPAWN_TICKS_EARLY - (SPAWN_TICKS_EARLY - SPAWN_TICKS_LATE) * frac))
+    pool = EARLY_KEYS if frac < 0.4 else ALL_KEYS
+    if tick % interval == 0 and len(state["incident_cells"]) < MAX_INCIDENT_CELLS:
         healthy = [n for n in state["cells"] if n not in state["incident_cells"]]
         if healthy:
             name = rng.choice(healthy)
-            rc = rng.choice(list(ARCHETYPES))
+            rc = rng.choice(pool)
             apply_symptom(state["cells"][name], rc)
             state["incident_cells"].add(name)
             push_metrics(sid, state, name)
@@ -207,7 +237,7 @@ def tick_session(sid):
                 post("/api/internal/sessions/%d/incidents" % sid,
                      {"playerId": pid, "cellId": name_to_id[name], "incidentType": ARCHETYPES[rc]["type"],
                       "severity": ARCHETYPES[rc]["severity"], "rootCause": rc, "description": DESCRIPTIONS[rc]})
-            print("[sim] new incident on %s (session %d)" % (name, sid), flush=True)
+            print("[sim] new incident on %s (session %d, frac=%.2f)" % (name, sid, frac), flush=True)
 
 
 def loop_once():
@@ -217,7 +247,7 @@ def loop_once():
             continue
         sid = s["id"]
         if sid in SESSIONS:
-            tick_session(sid)
+            tick_session(s)
         elif not register_existing(sid):
             seed_session(s)
 

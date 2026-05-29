@@ -107,6 +107,15 @@ function App() {
           <div className="crumb">{CRUMB[route.screen]}{route.screen === 'incident' && <span className="dim"> · {route.params.id}</span>}</div>
           <div className="spacer" />
           <div className="chip">GAME <b>{conn.session.sessionCode}</b></div>
+          {(() => {
+            const ended = state.sessionStatus === 'ENDED';
+            const remaining = state.endsAt != null ? Math.max(0, state.endsAt - Date.now()) : null;
+            const label = ended || remaining === 0 ? 'ENDED'
+              : remaining == null ? '--:--'
+              : `${String(Math.floor(remaining / 60000)).padStart(2, '0')}:${String(Math.floor(remaining / 1000) % 60).padStart(2, '0')}`;
+            const danger = ended || (remaining != null && remaining <= 30000);
+            return <div className="chip" style={{ color: danger ? 'var(--crit)' : 'var(--text-2)', borderColor: danger ? 'var(--crit)' : 'var(--hair)' }}>⏱ {label}</div>;
+          })()}
           <div className="online"><span className="dot" />ONLINE</div>
           <div className="chip" style={{ color: 'var(--accent)', borderColor: 'var(--accent-line)' }}><b>{state.score.toLocaleString()}</b> PTS</div>
           <button className="icon-btn" title="Fullscreen" onClick={() => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }}><Icon name="expand" size={16} /></button>
