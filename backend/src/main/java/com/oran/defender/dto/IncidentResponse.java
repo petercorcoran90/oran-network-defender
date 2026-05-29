@@ -10,6 +10,7 @@ import java.time.Instant;
 public record IncidentResponse(
         Long id,
         Long gameSessionId,
+        Long playerId,
         Long cellId,
         String incidentType,
         String severity,
@@ -22,6 +23,7 @@ public record IncidentResponse(
         return new IncidentResponse(
                 incident.getId(),
                 incident.getGameSession().getId(),
+                incident.getPlayer().getId(),
                 incident.getCell().getId(),
                 incident.getIncidentType(),
                 incident.getSeverity().name(),

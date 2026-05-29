@@ -1,7 +1,7 @@
 package com.oran.defender.controller;
 
 import com.oran.defender.dto.IncidentResponse;
-import com.oran.defender.model.PlayerAction;
+import com.oran.defender.dto.PlayerActionResponse;
 import com.oran.defender.service.IncidentService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -21,11 +21,13 @@ public class IncidentController {
 
     record SubmitActionRequest(@NotNull Long playerId, @NotNull Long actionId) {}
 
-    // Get all incidents for a session — optionally filter by status (OPEN, RESOLVED, FAILED)
+    // Get incidents for a session — pass ?playerId= for one player's incidents,
+    // and/or ?status= to filter by OPEN, RESOLVED, FAILED
     @GetMapping
     public List<IncidentResponse> getIncidents(@PathVariable Long sessionId,
+                                               @RequestParam(required = false) Long playerId,
                                                @RequestParam(required = false) String status) {
-        return incidentService.getIncidents(sessionId, status);
+        return incidentService.getIncidents(sessionId, playerId, status);
     }
 
     // Get a single incident's details including evidence
@@ -37,16 +39,18 @@ public class IncidentController {
 
     // Player submits an action against an incident
     @PostMapping("/{incidentId}/actions")
-    public PlayerAction submitAction(@PathVariable Long sessionId,
-                                     @PathVariable Long incidentId,
-                                     @Valid @RequestBody SubmitActionRequest req) {
-        return incidentService.submitAction(sessionId, incidentId, req.playerId(), req.actionId());
+    public PlayerActionResponse submitAction(@PathVariable Long sessionId,
+                                             @PathVariable Long incidentId,
+                                             @Valid @RequestBody SubmitActionRequest req) {
+        return PlayerActionResponse.from(
+                incidentService.submitAction(sessionId, incidentId, req.playerId(), req.actionId()));
     }
 
     // Get all actions submitted for a specific incident
     @GetMapping("/{incidentId}/actions")
-    public List<PlayerAction> getIncidentActions(@PathVariable Long sessionId,
-                                                  @PathVariable Long incidentId) {
-        return incidentService.getActionsForIncident(sessionId, incidentId);
+    public List<PlayerActionResponse> getIncidentActions(@PathVariable Long sessionId,
+                                                          @PathVariable Long incidentId) {
+        return incidentService.getActionsForIncident(sessionId, incidentId).stream()
+                .map(PlayerActionResponse::from).toList();
     }
 }

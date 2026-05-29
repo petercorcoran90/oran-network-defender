@@ -1,7 +1,7 @@
 package com.oran.defender.controller;
 
-import com.oran.defender.model.GameSession;
-import com.oran.defender.model.Player;
+import com.oran.defender.dto.PlayerResponse;
+import com.oran.defender.dto.SessionResponse;
 import com.oran.defender.service.SessionService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -31,39 +31,39 @@ public class SessionController {
     // Create a new game session (status = WAITING)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public GameSession createSession(@Valid @RequestBody CreateSessionRequest req) {
-        return sessionService.createSession(req.name(), req.createdByUserId(), req.durationSeconds());
+    public SessionResponse createSession(@Valid @RequestBody CreateSessionRequest req) {
+        return SessionResponse.from(sessionService.createSession(req.name(), req.createdByUserId(), req.durationSeconds()));
     }
 
     // List all sessions with status WAITING or ACTIVE
     @GetMapping
-    public List<GameSession> listSessions() {
-        return sessionService.listActiveSessions();
+    public List<SessionResponse> listSessions() {
+        return sessionService.listActiveSessions().stream().map(SessionResponse::from).toList();
     }
 
     // Get a single session by ID
     @GetMapping("/{id}")
-    public GameSession getSession(@PathVariable Long id) {
-        return sessionService.getSession(id);
+    public SessionResponse getSession(@PathVariable Long id) {
+        return SessionResponse.from(sessionService.getSession(id));
     }
 
     // Join an existing session (creates a Player record)
     @PostMapping("/{id}/join")
     @ResponseStatus(HttpStatus.CREATED)
-    public Player joinSession(@PathVariable Long id,
-                              @Valid @RequestBody JoinSessionRequest req) {
-        return sessionService.joinSession(id, req.userId(), req.teamName());
+    public PlayerResponse joinSession(@PathVariable Long id,
+                                      @Valid @RequestBody JoinSessionRequest req) {
+        return PlayerResponse.from(sessionService.joinSession(id, req.userId(), req.teamName()));
     }
 
     // Start the session — transitions status from WAITING to ACTIVE
     @PostMapping("/{id}/start")
-    public GameSession startSession(@PathVariable Long id) {
-        return sessionService.startSession(id);
+    public SessionResponse startSession(@PathVariable Long id) {
+        return SessionResponse.from(sessionService.startSession(id));
     }
 
     // Get all players in a session (ordered by score desc)
     @GetMapping("/{id}/players")
-    public List<Player> getPlayers(@PathVariable Long id) {
-        return sessionService.getPlayers(id);
+    public List<PlayerResponse> getPlayers(@PathVariable Long id) {
+        return sessionService.getPlayers(id).stream().map(PlayerResponse::from).toList();
     }
 }

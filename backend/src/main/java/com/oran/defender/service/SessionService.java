@@ -2,6 +2,7 @@ package com.oran.defender.service;
 
 import com.oran.defender.exception.ConflictException;
 import com.oran.defender.exception.NotFoundException;
+import com.oran.defender.game.GameInitializer;
 import com.oran.defender.model.AppUser;
 import com.oran.defender.model.GameSession;
 import com.oran.defender.model.GameSession.SessionStatus;
@@ -29,14 +30,17 @@ public class SessionService {
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
     private final AppUserRepository userRepository;
+    private final GameInitializer gameInitializer;
     private final SecureRandom random = new SecureRandom();
 
     public SessionService(GameSessionRepository sessionRepository,
                           PlayerRepository playerRepository,
-                          AppUserRepository userRepository) {
+                          AppUserRepository userRepository,
+                          GameInitializer gameInitializer) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.userRepository = userRepository;
+        this.gameInitializer = gameInitializer;
     }
 
     @Transactional
@@ -89,8 +93,7 @@ public class SessionService {
 
         // Auto-start the match the moment the second player joins.
         if (playerCount + 1 == MAX_PLAYERS) {
-            transitionToActive(session);
-            sessionRepository.save(session);
+            activate(session);
         }
         return saved;
     }
@@ -104,8 +107,8 @@ public class SessionService {
         if (playerRepository.countByGameSessionId(sessionId) < MAX_PLAYERS) {
             throw new ConflictException("Session needs " + MAX_PLAYERS + " players to start");
         }
-        transitionToActive(session);
-        return sessionRepository.save(session);
+        activate(session);
+        return session;
     }
 
     @Transactional(readOnly = true)
@@ -114,6 +117,14 @@ public class SessionService {
             throw new NotFoundException("Session not found");
         }
         return playerRepository.findByGameSessionIdOrderByScoreDesc(sessionId);
+    }
+
+    /** Flip to ACTIVE, persist, then seed both players' networks + incidents. */
+    private void activate(GameSession session) {
+        transitionToActive(session);
+        sessionRepository.save(session);
+        gameInitializer.setUpNetwork(session,
+                playerRepository.findByGameSessionIdOrderByScoreDesc(session.getId()));
     }
 
     private void transitionToActive(GameSession session) {

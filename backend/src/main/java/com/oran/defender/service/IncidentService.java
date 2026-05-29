@@ -53,10 +53,20 @@ public class IncidentService {
     }
 
     @Transactional(readOnly = true)
-    public List<IncidentResponse> getIncidents(Long sessionId, String status) {
-        List<Incident> incidents = (status == null || status.isBlank())
-                ? incidentRepository.findByGameSessionId(sessionId)
-                : incidentRepository.findByGameSessionIdAndStatus(sessionId, parseStatus(status));
+    public List<IncidentResponse> getIncidents(Long sessionId, Long playerId, String status) {
+        boolean hasStatus = status != null && !status.isBlank();
+        IncidentStatus parsed = hasStatus ? parseStatus(status) : null;
+        List<Incident> incidents;
+        if (playerId != null) {
+            // A player only ever sees their own mirrored incidents.
+            incidents = hasStatus
+                    ? incidentRepository.findByPlayerIdAndStatus(playerId, parsed)
+                    : incidentRepository.findByPlayerId(playerId);
+        } else {
+            incidents = hasStatus
+                    ? incidentRepository.findByGameSessionIdAndStatus(sessionId, parsed)
+                    : incidentRepository.findByGameSessionId(sessionId);
+        }
         return incidents.stream().map(IncidentResponse::from).toList();
     }
 

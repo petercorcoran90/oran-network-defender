@@ -17,7 +17,12 @@ public class NetworkCellService {
     }
 
     @Transactional(readOnly = true)
-    public List<NetworkCell> getCells(Long sessionId) {
+    public List<NetworkCell> getCells(Long sessionId, Long playerId) {
+        // In head-to-head a player should see their own network; without a playerId
+        // (e.g. an admin/overview view) return every cell in the session.
+        if (playerId != null) {
+            return cellRepository.findByPlayerId(playerId);
+        }
         return cellRepository.findByGameSessionId(sessionId);
     }
 
