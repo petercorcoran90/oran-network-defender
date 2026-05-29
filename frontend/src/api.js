@@ -49,6 +49,7 @@ export const Api = {
   joinSession: (id, userId, teamName) =>
     request(`/sessions/${id}/join`, { method: 'POST', body: { userId, teamName } }),
   startSession: (id) => request(`/sessions/${id}/start`, { method: 'POST' }),
+  ready: (id, playerId) => request(`/sessions/${id}/ready`, { method: 'POST', body: { playerId } }),
   getPlayers: (id) => request(`/sessions/${id}/players`),
 
   // --- network cells ---

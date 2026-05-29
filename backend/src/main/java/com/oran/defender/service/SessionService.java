@@ -1,6 +1,7 @@
 package com.oran.defender.service;
 
 import com.oran.defender.exception.ConflictException;
+import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.game.GameInitializer;
 import com.oran.defender.model.AppUser;
@@ -89,13 +90,32 @@ public class SessionService {
         player.setGameSession(session);
         player.setTeamName(teamName == null || teamName.isBlank() ? user.getUsername() : teamName);
         player.setScore(0);
-        Player saved = playerRepository.save(player);
+        return playerRepository.save(player);
+    }
 
-        // Auto-start the match the moment the second player joins.
-        if (playerCount + 1 == MAX_PLAYERS) {
+    /**
+     * Marks a player ready. Once both players in a full session are ready, the match
+     * activates. (Clients run a short countdown off the resulting ACTIVE status.)
+     */
+    @Transactional
+    public GameSession markReady(Long sessionId, Long playerId) {
+        GameSession session = getSession(sessionId);
+        if (session.getStatus() != SessionStatus.WAITING) {
+            throw new ConflictException("Match has already started");
+        }
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new NotFoundException("Player not found"));
+        if (!player.getGameSession().getId().equals(sessionId)) {
+            throw new InvalidActionException("Player is not part of this session");
+        }
+        player.setReady(true);
+        playerRepository.save(player);
+
+        List<Player> players = playerRepository.findByGameSessionIdOrderByScoreDesc(sessionId);
+        if (players.size() == MAX_PLAYERS && players.stream().allMatch(Player::isReady)) {
             activate(session);
         }
-        return saved;
+        return session;
     }
 
     @Transactional

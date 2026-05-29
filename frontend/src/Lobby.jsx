@@ -46,6 +46,10 @@ export default function Lobby({ onEnter }) {
   const [session, setSession] = useState(null);      // GameSession
   const [playerId, setPlayerId] = useState(null);
   const [players, setPlayers] = useState([]);
+  const [countdown, setCountdown] = useState(null);   // 3..2..1 once both ready
+
+  const myPlayer = players.find((p) => p.id === playerId);
+  const myReady = !!(myPlayer && myPlayer.ready);
 
   const run = useCallback(async (fn) => {
     setBusy(true); setError(null);
@@ -107,8 +111,23 @@ export default function Lobby({ onEnter }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, session?.id]);
 
+  async function readyUp() {
+    await run(() => Api.ready(session.id, playerId)).catch(() => {});
+  }
+
+  // Once the backend flips the match to ACTIVE (both players ready), run a 3-2-1 countdown
+  // and then drop both players into the game console.
+  useEffect(() => {
+    if (step !== 'room' || !session || session.status !== 'ACTIVE') return undefined;
+    if (countdown === null) { setCountdown(3); return undefined; }
+    if (countdown <= 0) { onEnter({ user, session, playerId }); return undefined; }
+    const h = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, session?.status, countdown]);
+
   function leave() {
-    setSession(null); setPlayers([]); setPlayerId(null); setError(null); setStep('choose');
+    setSession(null); setPlayers([]); setPlayerId(null); setCountdown(null); setError(null); setStep('choose');
   }
 
   return (
@@ -182,27 +201,38 @@ export default function Lobby({ onEnter }) {
                 {[0, 1].map((i) => {
                   const p = players[i];
                   return (
-                    <div key={i} className="inc-mini" style={{ borderLeftColor: p ? 'var(--good)' : 'var(--hair)' }}>
+                    <div key={i} className="inc-mini" style={{ borderLeftColor: p ? (p.ready ? 'var(--good)' : 'var(--warn)') : 'var(--hair)' }}>
                       <div className="inc-hdr">
                         <span className="t">{p ? p.teamName : 'Waiting for player…'}{p && p.id === playerId ? ' (you)' : ''}</span>
-                        <span className="chip"><b>{p ? p.score : '—'}</b> PTS</span>
+                        {p
+                          ? <span className={'tag ' + (p.ready ? 'good' : 'muted')}>{p.ready ? 'READY' : 'NOT READY'}</span>
+                          : <span className="chip">—</span>}
                       </div>
                     </div>
                   );
                 })}
               </div>
-              {session.status === 'WAITING' && (
-                <p style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, marginTop: 0 }}>
-                  Share the code above. The match auto-starts when the second player joins.
-                </p>
+
+              {countdown !== null && session.status === 'ACTIVE' ? (
+                <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                  <div style={{ fontFamily: 'var(--font-head)', fontSize: 44, fontWeight: 700, color: 'var(--accent)' }}>{countdown > 0 ? countdown : 'GO'}</div>
+                  <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Match starting…</div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn primary" style={{ flex: 1, justifyContent: 'center' }}
+                      disabled={busy || myReady || players.length < 2}
+                      onClick={readyUp}>
+                      {myReady ? 'Ready ✓' : players.length < 2 ? 'Waiting for opponent…' : 'Ready up'}
+                    </button>
+                    <button className="btn ghost" onClick={leave}>Leave</button>
+                  </div>
+                  <p style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: 12, marginTop: 10 }}>
+                    The match starts when both players are ready.
+                  </p>
+                </>
               )}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn primary" style={{ flex: 1, justifyContent: 'center' }}
-                  onClick={() => onEnter({ user, session, playerId })}>
-                  Enter game console
-                </button>
-                <button className="btn ghost" onClick={leave}>Leave</button>
-              </div>
             </>
           )}
 

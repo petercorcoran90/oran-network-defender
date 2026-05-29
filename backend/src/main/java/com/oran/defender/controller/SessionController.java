@@ -27,6 +27,7 @@ public class SessionController {
                                 @NotNull Long createdByUserId,
                                 @Positive Integer durationSeconds) {}
     record JoinSessionRequest(@NotNull Long userId, String teamName) {}
+    record ReadyRequest(@NotNull Long playerId) {}
 
     // Create a new game session (status = WAITING)
     @PostMapping
@@ -53,6 +54,12 @@ public class SessionController {
     public PlayerResponse joinSession(@PathVariable Long id,
                                       @Valid @RequestBody JoinSessionRequest req) {
         return PlayerResponse.from(sessionService.joinSession(id, req.userId(), req.teamName()));
+    }
+
+    // Mark a player ready; the match activates once both players are ready
+    @PostMapping("/{id}/ready")
+    public SessionResponse ready(@PathVariable Long id, @Valid @RequestBody ReadyRequest req) {
+        return SessionResponse.from(sessionService.markReady(id, req.playerId()));
     }
 
     // Start the session — transitions status from WAITING to ACTIVE

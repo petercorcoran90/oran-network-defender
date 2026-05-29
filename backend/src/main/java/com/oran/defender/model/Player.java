@@ -38,6 +38,10 @@ public class Player {
     @Column(nullable = false)
     private Integer score = 0;
 
+    @Column(nullable = false)
+    @org.hibernate.annotations.ColumnDefault("false")
+    private boolean ready = false;
+
     @Column(name = "joined_at", nullable = false)
     private Instant joinedAt = Instant.now();
 }
