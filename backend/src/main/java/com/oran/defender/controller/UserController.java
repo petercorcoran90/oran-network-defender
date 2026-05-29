@@ -1,6 +1,6 @@
 package com.oran.defender.controller;
 
-import com.oran.defender.model.User;
+import com.oran.defender.model.AppUser;
 import com.oran.defender.service.UserService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -22,13 +22,13 @@ public class UserController {
     // Register a new user
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public User createUser(@Valid @RequestBody CreateUserRequest req) {
+    public AppUser createUser(@Valid @RequestBody CreateUserRequest req) {
         return userService.createUser(req.username(), req.role());
     }
 
     // Get user by ID
     @GetMapping("/{id}")
-    public User getUser(@PathVariable Long id) {
+    public AppUser getUser(@PathVariable Long id) {
         return userService.getUser(id);
     }
 }

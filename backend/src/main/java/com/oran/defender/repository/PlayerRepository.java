@@ -9,4 +9,6 @@ public interface PlayerRepository extends JpaRepository<Player, Long> {
     List<Player> findByGameSessionIdOrderByScoreDesc(Long gameSessionId);
 
     Optional<Player> findByUserIdAndGameSessionId(Long userId, Long gameSessionId);
+
+    long countByGameSessionId(Long gameSessionId);
 }

@@ -6,6 +6,7 @@ import com.oran.defender.service.SessionService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,14 +22,17 @@ public class SessionController {
         this.sessionService = sessionService;
     }
 
-    record CreateSessionRequest(@NotBlank String name, @NotNull Long createdByUserId) {}
+    // durationSeconds is optional; when omitted the service applies a default match length.
+    record CreateSessionRequest(@NotBlank String name,
+                                @NotNull Long createdByUserId,
+                                @Positive Integer durationSeconds) {}
     record JoinSessionRequest(@NotNull Long userId, String teamName) {}
 
     // Create a new game session (status = WAITING)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public GameSession createSession(@Valid @RequestBody CreateSessionRequest req) {
-        return sessionService.createSession(req.name(), req.createdByUserId());
+        return sessionService.createSession(req.name(), req.createdByUserId(), req.durationSeconds());
     }
 
     // List all sessions with status WAITING or ACTIVE

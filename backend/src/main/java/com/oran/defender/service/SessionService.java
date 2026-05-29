@@ -1,43 +1,148 @@
 package com.oran.defender.service;
 
+import com.oran.defender.exception.ConflictException;
+import com.oran.defender.exception.NotFoundException;
+import com.oran.defender.model.AppUser;
 import com.oran.defender.model.GameSession;
+import com.oran.defender.model.GameSession.SessionStatus;
 import com.oran.defender.model.Player;
-import org.springframework.stereotype.Service;
-
+import com.oran.defender.repository.AppUserRepository;
+import com.oran.defender.repository.GameSessionRepository;
+import com.oran.defender.repository.PlayerRepository;
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.List;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class SessionService {
 
-    // TODO: inject GameSessionRepository, PlayerRepository, UserRepository
+    /** Head-to-head is exactly two players. */
+    static final int MAX_PLAYERS = 2;
 
-    public GameSession createSession(String name, Long createdByUserId) {
-        // TODO: create GameSession with status WAITING, persist, return
-        throw new UnsupportedOperationException("Not implemented");
+    private static final int DEFAULT_DURATION_SECONDS = 300;
+    // Ambiguous characters (0/O, 1/I) omitted so codes are easy to read out loud.
+    private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int CODE_LENGTH = 6;
+
+    private final GameSessionRepository sessionRepository;
+    private final PlayerRepository playerRepository;
+    private final AppUserRepository userRepository;
+    private final SecureRandom random = new SecureRandom();
+
+    public SessionService(GameSessionRepository sessionRepository,
+                          PlayerRepository playerRepository,
+                          AppUserRepository userRepository) {
+        this.sessionRepository = sessionRepository;
+        this.playerRepository = playerRepository;
+        this.userRepository = userRepository;
     }
 
+    @Transactional
+    public GameSession createSession(String name, Long createdByUserId, Integer durationSeconds) {
+        AppUser creator = userRepository.findById(createdByUserId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        GameSession session = new GameSession();
+        session.setName(name);
+        session.setSessionCode(generateUniqueCode());
+        session.setCreatedByUser(creator);
+        session.setStatus(SessionStatus.WAITING);
+        session.setDurationSeconds(durationSeconds != null ? durationSeconds : DEFAULT_DURATION_SECONDS);
+        return sessionRepository.save(session);
+    }
+
+    @Transactional(readOnly = true)
     public List<GameSession> listActiveSessions() {
-        // TODO: return sessions with status WAITING or ACTIVE
-        throw new UnsupportedOperationException("Not implemented");
+        return sessionRepository.findByStatusIn(List.of(SessionStatus.WAITING, SessionStatus.ACTIVE));
     }
 
+    @Transactional
     public GameSession getSession(Long sessionId) {
-        // TODO: find by ID or throw 404
-        throw new UnsupportedOperationException("Not implemented");
+        GameSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException("Session not found"));
+        return endIfExpired(session);
     }
 
+    @Transactional
     public Player joinSession(Long sessionId, Long userId, String teamName) {
-        // TODO: validate session is WAITING, create Player, persist, return
-        throw new UnsupportedOperationException("Not implemented");
+        GameSession session = getSession(sessionId);
+        if (session.getStatus() != SessionStatus.WAITING) {
+            throw new ConflictException("Session is not accepting players");
+        }
+        AppUser user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+        playerRepository.findByUserIdAndGameSessionId(userId, sessionId).ifPresent(existing -> {
+            throw new ConflictException("User has already joined this session");
+        });
+        long playerCount = playerRepository.countByGameSessionId(sessionId);
+        if (playerCount >= MAX_PLAYERS) {
+            throw new ConflictException("Session is full");
+        }
+
+        Player player = new Player();
+        player.setUser(user);
+        player.setGameSession(session);
+        player.setTeamName(teamName == null || teamName.isBlank() ? user.getUsername() : teamName);
+        player.setScore(0);
+        Player saved = playerRepository.save(player);
+
+        // Auto-start the match the moment the second player joins.
+        if (playerCount + 1 == MAX_PLAYERS) {
+            transitionToActive(session);
+            sessionRepository.save(session);
+        }
+        return saved;
     }
 
+    @Transactional
     public GameSession startSession(Long sessionId) {
-        // TODO: validate session is WAITING, set status ACTIVE, set startedAt, persist
-        throw new UnsupportedOperationException("Not implemented");
+        GameSession session = getSession(sessionId);
+        if (session.getStatus() != SessionStatus.WAITING) {
+            throw new ConflictException("Session cannot be started");
+        }
+        if (playerRepository.countByGameSessionId(sessionId) < MAX_PLAYERS) {
+            throw new ConflictException("Session needs " + MAX_PLAYERS + " players to start");
+        }
+        transitionToActive(session);
+        return sessionRepository.save(session);
     }
 
+    @Transactional(readOnly = true)
     public List<Player> getPlayers(Long sessionId) {
-        // TODO: return players ordered by score desc
-        throw new UnsupportedOperationException("Not implemented");
+        if (!sessionRepository.existsById(sessionId)) {
+            throw new NotFoundException("Session not found");
+        }
+        return playerRepository.findByGameSessionIdOrderByScoreDesc(sessionId);
+    }
+
+    private void transitionToActive(GameSession session) {
+        Instant now = Instant.now();
+        session.setStatus(SessionStatus.ACTIVE);
+        session.setStartedAt(now);
+        session.setEndedAt(now.plusSeconds(session.getDurationSeconds()));
+    }
+
+    /** Lazy timer: an ACTIVE session whose end time has passed is flipped to ENDED on read. */
+    private GameSession endIfExpired(GameSession session) {
+        if (session.getStatus() == SessionStatus.ACTIVE
+                && session.getEndedAt() != null
+                && Instant.now().isAfter(session.getEndedAt())) {
+            session.setStatus(SessionStatus.ENDED);
+            sessionRepository.save(session);
+        }
+        return session;
+    }
+
+    private String generateUniqueCode() {
+        String code;
+        do {
+            StringBuilder sb = new StringBuilder(CODE_LENGTH);
+            for (int i = 0; i < CODE_LENGTH; i++) {
+                sb.append(CODE_CHARS.charAt(random.nextInt(CODE_CHARS.length())));
+            }
+            code = sb.toString();
+        } while (sessionRepository.findBySessionCode(code).isPresent());
+        return code;
     }
 }
