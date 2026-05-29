@@ -1,7 +1,7 @@
 package com.oran.defender.controller;
 
 import com.oran.defender.model.Player;
-import com.oran.defender.model.ScoreEvent;
+import com.oran.defender.dto.ScoreEventResponse;
 import com.oran.defender.service.ScoreService;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,7 +25,9 @@ public class ScoreController {
 
     // Get the full score event history for a session (why points were awarded/deducted)
     @GetMapping("/events")
-    public List<ScoreEvent> getScoreEvents(@PathVariable Long sessionId) {
-        return scoreService.getScoreEvents(sessionId);
+    public List<ScoreEventResponse> getScoreEvents(@PathVariable Long sessionId) {
+        return scoreService.getScoreEvents(sessionId).stream()
+                .map(ScoreEventResponse::from)
+                .toList();
     }
 }
