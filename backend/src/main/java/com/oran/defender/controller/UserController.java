@@ -18,12 +18,19 @@ public class UserController {
     }
 
     record CreateUserRequest(@NotBlank String username, @NotBlank String role) {}
+    record LoginRequest(@NotBlank String username) {}
 
-    // Register a new user
+    // Register a new user (strict: 409 if the username already exists)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public AppUser createUser(@Valid @RequestBody CreateUserRequest req) {
         return userService.createUser(req.username(), req.role());
+    }
+
+    // Log in by username, registering on first use (no "name taken" error)
+    @PostMapping("/login")
+    public AppUser login(@Valid @RequestBody LoginRequest req) {
+        return userService.login(req.username());
     }
 
     // Get user by ID

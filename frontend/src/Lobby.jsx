@@ -62,7 +62,7 @@ export default function Lobby({ onEnter }) {
   async function identify() {
     if (!username.trim()) return;
     await run(async () => {
-      const u = await Api.createUser(username.trim());
+      const u = await Api.login(username.trim());
       setUser(u);
       setMatchName(`${u.username}'s match`);
       setStep('choose');

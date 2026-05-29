@@ -27,6 +27,22 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    /**
+     * Log in by username, registering on first use. With no passwords the username is the
+     * identity, so re-entering a known name returns that same user (lets a player start a new
+     * game without a "name taken" error). NOTE: without auth this also means anyone can claim
+     * any username — real authentication is still a documented gap.
+     */
+    @Transactional
+    public AppUser login(String username) {
+        return userRepository.findByUsername(username).orElseGet(() -> {
+            AppUser user = new AppUser();
+            user.setUsername(username);
+            user.setRole("PLAYER");
+            return userRepository.save(user);
+        });
+    }
+
     @Transactional(readOnly = true)
     public AppUser getUser(Long id) {
         return userRepository.findById(id)
