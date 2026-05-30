@@ -71,6 +71,12 @@ function MapLegend() {
 }
 
 // ---------- O-RAN topology ----------
+// Simplified but architecturally accurate O-RAN layout:
+//   data path:  O-RU --Open FH--> O-DU --F1--> O-CU --N2/N3--> 5GC (AMF/UPF)
+//   control:    SMO (hosts Non-RT RIC/rApps) --A1--> Near-RT RIC (xApps) --E2--> O-CU/O-DU
+//               SMO --O1--> managed RAN nodes
+// The gNB is the O-CU + O-DU + O-RU together, so it isn't drawn as a separate box.
+// Solid edges = user/data plane; dashed = control/management plane.
 function Topology({ cells, height = 360 }) {
   const avg = Math.round(cells.reduce((a, c) => a + c.health, 0) / cells.length);
   const worst = Math.min(...cells.map((c) => c.health));
@@ -78,26 +84,42 @@ function Topology({ cells, height = 360 }) {
   const a1 = Math.round(cells.slice(0, half).reduce((a, c) => a + c.health, 0) / half);
   const a2 = Math.round(cells.slice(half).reduce((a, c) => a + c.health, 0) / (cells.length - half));
   const N = {
-    gnb:  { x: 8,  y: 50, label: 'gNB', sub: 'base station', icon: 'radio', st: statusOf(avg) },
-    ru1:  { x: 26, y: 30, label: 'O-RU', sub: 'radio unit', st: statusOf(a1) },
-    ru2:  { x: 26, y: 70, label: 'O-RU', sub: 'radio unit', st: statusOf(a2) },
-    odu:  { x: 46, y: 50, label: 'O-DU', sub: 'distributed', st: statusOf(avg) },
-    ocu:  { x: 66, y: 50, label: 'O-CU', sub: 'centralized', st: 'good' },
-    nrt:  { x: 46, y: 86, label: 'Near-RT', sub: 'RIC', st: worst < 40 ? 'warn' : 'good' },
-    nonrt:{ x: 66, y: 86, label: 'Non-RT', sub: 'RIC', st: 'good' },
-    amf:  { x: 90, y: 32, label: 'AMF', sub: '5GC', st: 'good' },
-    upf:  { x: 90, y: 68, label: 'UPF', sub: '5GC', st: 'good' },
+    smo:   { x: 50, y: 9,  label: 'SMO', sub: 'orchestration', st: 'good' },
+    nonrt: { x: 32, y: 26, label: 'Non-RT RIC', sub: 'rApps', st: 'good' },
+    nrt:   { x: 60, y: 40, label: 'Near-RT RIC', sub: 'xApps', st: worst < 40 ? 'warn' : 'good' },
+    ru1:   { x: 13, y: 60, label: 'O-RU', sub: 'radio unit', st: statusOf(a1) },
+    ru2:   { x: 13, y: 86, label: 'O-RU', sub: 'radio unit', st: statusOf(a2) },
+    odu:   { x: 40, y: 73, label: 'O-DU', sub: 'distributed unit', st: statusOf(avg) },
+    ocu:   { x: 64, y: 73, label: 'O-CU', sub: 'central unit', st: statusOf(avg) },
+    amf:   { x: 89, y: 60, label: 'AMF', sub: '5GC · control', st: 'good' },
+    upf:   { x: 89, y: 86, label: 'UPF', sub: '5GC · user', st: 'good' },
   };
-  const E = [['gnb', 'ru1'], ['gnb', 'ru2'], ['ru1', 'odu'], ['ru2', 'odu'], ['odu', 'ocu'], ['odu', 'nrt'], ['ocu', 'nonrt'], ['ocu', 'amf'], ['ocu', 'upf']];
+  // [from, to, interface label, isControlPlane]
+  const E = [
+    ['ru1', 'odu', 'Open FH', false], ['ru2', 'odu', '', false],
+    ['odu', 'ocu', 'F1', false],
+    ['ocu', 'amf', 'N2', false], ['ocu', 'upf', 'N3', false],
+    ['nrt', 'ocu', 'E2', true], ['nrt', 'odu', '', true],
+    ['nonrt', 'nrt', 'A1', true],
+    ['smo', 'nonrt', '', true],
+    ['smo', 'odu', 'O1', true],
+  ];
   return (
     <div className="topo" style={{ height }}>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-        {E.map(([a, b], i) => (
+        {E.map(([a, b, , ctrl], i) => (
           <line key={i} x1={N[a].x} y1={N[a].y} x2={N[b].x} y2={N[b].y}
-            stroke="rgba(120,200,150,.28)" strokeWidth=".4" vectorEffect="non-scaling-stroke" />
+            stroke="rgba(120,200,150,.28)" strokeWidth=".4"
+            strokeDasharray={ctrl ? '1.5 1.5' : undefined} vectorEffect="non-scaling-stroke" />
         ))}
-        <line x1={N.nrt.x} y1={N.nrt.y} x2={N.ocu.x} y2={N.ocu.y} stroke="rgba(120,200,150,.28)" strokeWidth=".4" strokeDasharray="1.5 1.5" vectorEffect="non-scaling-stroke" />
       </svg>
+      {E.filter(([, , lbl]) => lbl).map(([a, b, lbl], i) => (
+        <span key={'l' + i} style={{
+          position: 'absolute', left: (N[a].x + N[b].x) / 2 + '%', top: (N[a].y + N[b].y) / 2 + '%',
+          transform: 'translate(-50%,-50%)', fontSize: 9, letterSpacing: '.04em', color: 'var(--text-3)',
+          background: 'var(--panel)', padding: '0 4px', borderRadius: 2, whiteSpace: 'nowrap', pointerEvents: 'none',
+        }}>{lbl}</span>
+      ))}
       {Object.entries(N).map(([k, n]) => (
         <div key={k} className="topo-node" style={{ left: n.x + '%', top: n.y + '%' }}>
           <span className="stat-dot" style={{ background: STATUS_COLOR[n.st], boxShadow: '0 0 7px ' + STATUS_COLOR[n.st] }} />

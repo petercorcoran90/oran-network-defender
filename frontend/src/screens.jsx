@@ -159,9 +159,11 @@ function NetworkMapPage({ state, nav, route, store }) {
                     <span style={{ fontFamily: 'var(--font-head)', fontSize: 22, color: STATUS_COLOR[st] }}>{selCell.health}%</span>
                     <span className="tag" style={{ color: STATUS_COLOR[st], borderColor: 'transparent', background: 'color-mix(in oklab,' + STATUS_COLOR[st] + ' 13%,transparent)' }}>{st}</span>
                   </div>
-                  <div className="kv"><span className="k">Connected users</span><span className="v mono">{selCell.users}</span></div>
+                  <div className="kv"><span className="k">Signal quality</span><span className="v mono">{Math.round(selCell.signalQuality)}%</span></div>
+                  <div className="kv"><span className="k">User load</span><span className="v mono">{Math.round(selCell.userLoad)}%</span></div>
+                  <div className="kv"><span className="k">Latency</span><span className="v mono">{Math.round(selCell.latency)} ms</span></div>
+                  <div className="kv"><span className="k">Packet loss</span><span className="v mono">{Math.round(selCell.packetLoss)}%</span></div>
                   <div className="kv"><span className="k">Active incidents</span><span className="v mono">{selIncidents.length}</span></div>
-                  <div className="kv"><span className="k">Coordinates</span><span className="v mono">{selCell.x}, {selCell.y}</span></div>
                   {selIncidents.length > 0 && <div style={{ marginTop: 14 }}>
                     <div className="lbl" style={{ fontSize: 10.5, color: 'var(--text-3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>Open on this cell</div>
                     <ActiveIncidents state={{ ...state, incidents: selIncidents }} nav={nav} />
@@ -173,7 +175,7 @@ function NetworkMapPage({ state, nav, route, store }) {
         </div>
       ) : (
         <div className="panel">
-          <div className="panel-head"><h2>O-RAN Topology — Detailed View</h2><span className="corner">gNB · RU · DU · CU · RIC · 5GC</span></div>
+          <div className="panel-head"><h2>O-RAN Topology — Detailed View</h2><span className="corner">SMO · RIC · O-CU · O-DU · O-RU · 5GC</span></div>
           <div className="panel-pad">
             <Topology cells={state.cells} height={400} />
             <div style={{ marginTop: 18, borderTop: '1px solid var(--hair)', paddingTop: 14 }}><MapLegend /></div>
