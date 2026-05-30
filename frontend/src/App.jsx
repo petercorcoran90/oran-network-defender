@@ -2,7 +2,7 @@ import React, { useState, useEffect, useReducer, useMemo } from 'react';
 import { createBackendStore, Selectors as GameSelectors } from './store.js';
 import { Icon } from './ui.jsx';
 import { Dashboard, NetworkMapPage, Incidents, IncidentDetail, Actions, Scoreboard, Players, Settings } from './screens.jsx';
-import { useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio, TweakSlider } from './TweaksPanel.jsx';
+import { useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio } from './TweaksPanel.jsx';
 import Lobby from './Lobby.jsx';
 import GameOver from './GameOver.jsx';
 
@@ -64,9 +64,6 @@ function App() {
     root.style.setProperty('--font-mono', fp.mono);
     root.setAttribute('data-density', t.density);
   }, [t.accent, t.fontPair, t.density]);
-
-  // apply game-config tweaks to the store
-  useEffect(() => { store?.setConfig({ difficulty: t.difficulty, simSpeed: t.simSpeed }); }, [store, t.difficulty, t.simSpeed]);
 
   // Gate on the real backend lobby. Until the player enters a match, show the connect flow.
   if (!conn) return <Lobby onEnter={setConn} />;
@@ -144,12 +141,6 @@ function App() {
         <TweakRadio label="Density" value={t.density}
           options={[{ label: 'Compact', value: 'compact' }, { label: 'Cozy', value: 'cozy' }, { label: 'Comfy', value: 'comfy' }]}
           onChange={(v) => setTweak('density', v)} />
-        <TweakSection label="Simulation" />
-        <TweakRadio label="Difficulty" value={t.difficulty}
-          options={[{ label: 'Easy', value: 'easy' }, { label: 'Normal', value: 'normal' }, { label: 'Hard', value: 'hard' }]}
-          onChange={(v) => setTweak('difficulty', v)} />
-        <TweakSlider label="Sim speed" value={t.simSpeed} min={0} max={3} step={0.5} unit="×"
-          onChange={(v) => setTweak('simSpeed', v)} />
       </TweaksPanel>
 
       {confirmLeave && (

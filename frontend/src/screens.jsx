@@ -213,7 +213,6 @@ function Incidents({ state, nav }) {
               <Icon name="search" size={14} style={{ color: 'var(--text-3)' }} />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" style={{ background: 'none', border: 'none', color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-mono)', fontSize: 12, width: 130 }} />
             </div>
-            <button className="btn ghost"><Icon name="filter" size={14} /> Filters</button>
           </div>
         </div>
         <table>
@@ -306,7 +305,6 @@ function IncidentDetail({ state, store, nav, route }) {
             <div style={{ fontFamily: 'var(--font-head)', fontSize: 20, fontWeight: 600 }}>{inc.title}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}><SevTag sev={inc.severity} /><StatusTag status={inc.status} /><span className="id" style={{ alignSelf: 'center' }}>{inc.id}</span></div>
           </div>
-          {inc.status === 'open' && <button className="btn" onClick={() => store.acknowledge(inc.id)}><Icon name="bell" size={14} /> Acknowledge</button>}
           {inc.status === 'resolved' && <span className="tag good" style={{ fontSize: 12, padding: '6px 12px' }}><Icon name="check" size={13} /> Resolved</span>}
           {failed && <span className="tag crit" style={{ fontSize: 12, padding: '6px 12px' }}><Icon name="x" size={13} /> Failed — wrong action</span>}
         </div>
@@ -424,23 +422,21 @@ function Scoreboard({ state, nav }) {
       <div className="panel">
         {tab === 'teams' ? (
           <table>
-            <thead><tr><th style={{ width: 50 }}>Rank</th><th>Team</th><th>Score</th><th>Health</th><th>Resolved</th><th>Penalty</th></tr></thead>
+            <thead><tr><th style={{ width: 50 }}>Rank</th><th>Team</th><th>Score</th><th>Resolved</th></tr></thead>
             <tbody>
               {teams.map((tm, i) => (
                 <tr key={tm.id} className={tm.you ? 'me' : ''}>
                   <td className="rank" style={{ color: i === 0 ? 'var(--accent)' : 'inherit' }}>{i + 1}</td>
                   <td style={{ fontWeight: 600 }}>{tm.name}{tm.you && <span style={{ color: 'var(--accent)' }}> (you)</span>}</td>
                   <td className="mono" style={{ fontWeight: 600 }}>{tm.score.toLocaleString()}</td>
-                  <td className="mono">{tm.health}%</td>
                   <td className="mono">{tm.resolved}</td>
-                  <td className="mono" style={{ color: 'var(--crit)' }}>{tm.penalty}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         ) : (
           <table>
-            <thead><tr><th style={{ width: 50 }}>Rank</th><th>Player</th><th>Team</th><th>Score</th><th>Resolved</th><th>Status</th></tr></thead>
+            <thead><tr><th style={{ width: 50 }}>Rank</th><th>Player</th><th>Team</th><th>Score</th><th>Resolved</th></tr></thead>
             <tbody>
               {players.map((p, i) => (
                 <tr key={p.id} className={p.you ? 'me' : ''}>
@@ -449,7 +445,6 @@ function Scoreboard({ state, nav }) {
                   <td className="mono">{p.team}</td>
                   <td className="mono" style={{ fontWeight: 600 }}>{p.score.toLocaleString()}</td>
                   <td className="mono">{p.resolved}</td>
-                  <td><span className="tag" style={{ color: p.online ? 'var(--good)' : 'var(--text-3)', background: 'transparent', borderColor: 'var(--hair)' }}><i className="dot-sm" style={{ background: p.online ? 'var(--good)' : 'var(--text-3)' }} />{p.online ? 'online' : 'offline'}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -481,7 +476,6 @@ function Players({ state }) {
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{p.name}{p.you && <span style={{ color: 'var(--accent)' }}> (you)</span>}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-3)' }}>{p.score.toLocaleString()} pts · {p.resolved} resolved</div>
                 </div>
-                <span className="dot-sm" style={{ background: p.online ? 'var(--good)' : 'var(--text-3)', boxShadow: p.online ? '0 0 7px var(--good)' : 'none' }} />
               </div>
             ))}
           </div>
@@ -495,39 +489,20 @@ function Players({ state }) {
 // 8 · SETTINGS
 // ============================================================
 function Settings({ state, openTweaks }) {
-  const [toggles, setToggles] = React.useState({ notify: true, sound: false, autoack: false, hints: true });
-  const T = (k, label, desc) => (
-    <div className="set-row">
-      <div><div className="st">{label}</div><div className="sd">{desc}</div></div>
-      <div className={'switch' + (toggles[k] ? ' on' : '')} onClick={() => setToggles((s) => ({ ...s, [k]: !s[k] }))}><i /></div>
-    </div>
-  );
   return (
     <div className="fade-in">
-      <div className="page-head"><div><h1>Settings</h1><div className="sub">Player &amp; game preferences</div></div></div>
+      <div className="page-head"><div><h1>Settings</h1><div className="sub">Session &amp; appearance</div></div></div>
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
         <div className="panel">
-          <div className="panel-head"><h2>Gameplay</h2></div>
-          {T('notify', 'Incident notifications', 'Toast me when a new incident is detected on my network.')}
-          {T('sound', 'Alert sound', 'Play an audio cue for high-severity incidents.')}
-          {T('autoack', 'Auto-acknowledge', 'Automatically mark new incidents as investigating.')}
-          {T('hints', 'Show recommended actions', 'Highlight the suggested remediation in incident detail.')}
+          <div className="panel-head"><h2>Session</h2></div>
+          <div className="panel-pad">
+            <div className="kv"><span className="k">Game code</span><span className="v mono">{state.game}</span></div>
+            <div className="kv"><span className="k">Player</span><span className="v">{state.you.player}</span></div>
+          </div>
         </div>
-        <div className="grid" style={{ gap: 'var(--gap)' }}>
-          <div className="panel">
-            <div className="panel-head"><h2>Session</h2></div>
-            <div className="panel-pad">
-              <div className="kv"><span className="k">Game ID</span><span className="v mono">{state.game}</span></div>
-              <div className="kv"><span className="k">Player</span><span className="v">{state.you.player}</span></div>
-              <div className="kv"><span className="k">Team</span><span className="v">{state.you.team}</span></div>
-              <div className="kv"><span className="k">Difficulty</span><span className="v" style={{ textTransform: 'capitalize' }}>{state.config.difficulty}</span></div>
-              <div className="kv"><span className="k">Simulation</span><span className="v">{state.config.simSpeed === 0 ? 'Paused' : state.config.simSpeed + '×'}</span></div>
-            </div>
-          </div>
-          <div className="panel panel-pad" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
-            <div><div className="st">Appearance &amp; difficulty</div><div className="sd">Accent, fonts, density, difficulty and sim speed live in the Tweaks panel.</div></div>
-            <button className="btn primary" onClick={openTweaks}><Icon name="settings" size={14} /> Open Tweaks</button>
-          </div>
+        <div className="panel panel-pad" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
+          <div><div className="st">Appearance</div><div className="sd">Accent colour, fonts and density live in the Tweaks panel.</div></div>
+          <button className="btn primary" onClick={openTweaks}><Icon name="settings" size={14} /> Open Tweaks</button>
         </div>
       </div>
     </div>
