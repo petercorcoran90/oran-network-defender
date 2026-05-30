@@ -223,6 +223,10 @@ public class SessionService {
         if (players.size() < 2) {
             return;
         }
+        // Don't pollute the high-score table with an early ragequit nobody had scored in.
+        if (forfeitLoserId != null && players.get(0).getScore() == 0) {
+            return;
+        }
         Player winner;
         Player loser;
         if (forfeitLoserId != null) {
