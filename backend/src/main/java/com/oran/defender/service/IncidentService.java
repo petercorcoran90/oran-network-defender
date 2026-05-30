@@ -188,6 +188,7 @@ public class IncidentService {
         cell.setPacketLoss(1.0);
         cell.setAlarmCount(0);
         cell.setHealthStatus(HealthStatus.GOOD);
+        cell.setConfigStatus(NetworkCell.ConfigStatus.STABLE);
         cellRepository.save(cell);
     }
 

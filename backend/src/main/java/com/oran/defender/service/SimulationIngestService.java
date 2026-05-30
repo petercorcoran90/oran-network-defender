@@ -8,6 +8,7 @@ import com.oran.defender.model.Incident;
 import com.oran.defender.model.Incident.IncidentStatus;
 import com.oran.defender.model.Incident.Severity;
 import com.oran.defender.model.NetworkCell;
+import com.oran.defender.model.NetworkCell.ConfigStatus;
 import com.oran.defender.model.NetworkCell.HealthStatus;
 import com.oran.defender.model.Player;
 import com.oran.defender.repository.GameSessionRepository;
@@ -32,7 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class SimulationIngestService {
 
     public record CellSpec(String cellName, double signalQuality, double userLoad, double latency,
-                           double packetLoss, int alarmCount, double energyUsage, String healthStatus) {}
+                           double packetLoss, int alarmCount, double energyUsage, String healthStatus,
+                           String configStatus) {}
 
     public record CellsRequest(Long playerId, List<CellSpec> cells) {}
 
@@ -40,7 +42,7 @@ public class SimulationIngestService {
                                   String rootCause, String description) {}
 
     public record MetricsRequest(double signalQuality, double userLoad, double latency, double packetLoss,
-                                 int alarmCount, double energyUsage, String healthStatus) {}
+                                 int alarmCount, double energyUsage, String healthStatus, String configStatus) {}
 
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
@@ -74,6 +76,7 @@ public class SimulationIngestService {
             cell.setAlarmCount(spec.alarmCount());
             cell.setEnergyUsage(spec.energyUsage());
             cell.setHealthStatus(healthStatus(spec.healthStatus()));
+            cell.setConfigStatus(configStatus(spec.configStatus()));
             created.add(cell);
         }
         return cellRepository.saveAll(created);
@@ -112,6 +115,7 @@ public class SimulationIngestService {
         cell.setAlarmCount(req.alarmCount());
         cell.setEnergyUsage(req.energyUsage());
         cell.setHealthStatus(healthStatus(req.healthStatus()));
+        cell.setConfigStatus(configStatus(req.configStatus()));
         return cellRepository.save(cell);
     }
 
@@ -132,6 +136,14 @@ public class SimulationIngestService {
     private HealthStatus healthStatus(String value) {
         try { return HealthStatus.valueOf(value); }
         catch (IllegalArgumentException | NullPointerException e) { throw new InvalidActionException("Unknown health status: " + value); }
+    }
+
+    private ConfigStatus configStatus(String value) {
+        if (value == null || value.isBlank()) {
+            return ConfigStatus.STABLE;
+        }
+        try { return ConfigStatus.valueOf(value); }
+        catch (IllegalArgumentException e) { throw new InvalidActionException("Unknown config status: " + value); }
     }
 
     private Severity severity(String value) {

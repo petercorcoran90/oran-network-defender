@@ -129,6 +129,7 @@ export function createBackendStore(conn) {
         userLoad: c.userLoad,
         latency: c.latency,
         packetLoss: c.packetLoss,
+        configStatus: c.configStatus,
       };
     });
     // a simple ring so the map has links to draw

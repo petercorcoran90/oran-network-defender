@@ -44,12 +44,12 @@ REFILL_PER_TICK = int(os.environ.get("REFILL_PER_TICK", "3"))
 # rootCause -> how it presents. rootCause values must match the backend RootCause enum.
 ARCHETYPES = {
     "CELL_OVERLOAD":          {"type": "Cell Overload",          "severity": "HIGH",   "health": "CRITICAL", "metrics": {"userLoad": 95, "latency": 180}},
-    "NEIGHBOUR_CONFIG_CHANGE":{"type": "Config Drift",           "severity": "MEDIUM", "health": "WARNING",  "metrics": {"packetLoss": 14, "latency": 70}},
+    "NEIGHBOUR_CONFIG_CHANGE":{"type": "Config Drift",           "severity": "MEDIUM", "health": "WARNING",  "metrics": {"packetLoss": 14, "latency": 70}, "config": "CHANGED"},
     "TRANSPORT_LINK_FAULT":   {"type": "Transport Link Fault",   "severity": "HIGH",   "health": "CRITICAL", "metrics": {"packetLoss": 22, "latency": 140}},
     "ALARM_STORM":            {"type": "Alarm Storm",            "severity": "HIGH",   "health": "WARNING",  "metrics": {"alarmCount": 12}},
     "NEIGHBOUR_INTERFERENCE": {"type": "Neighbour Interference", "severity": "MEDIUM", "health": "WARNING",  "metrics": {"signalQuality": 55}},
-    "SOFTWARE_UPGRADE_FAULT": {"type": "Software Upgrade Fault", "severity": "MEDIUM", "health": "WARNING",  "metrics": {"packetLoss": 9}},
-    "ROGUE_AUTOMATION":       {"type": "Rogue Automation",       "severity": "MEDIUM", "health": "WARNING",  "metrics": {"userLoad": 80, "latency": 120}},
+    "SOFTWARE_UPGRADE_FAULT": {"type": "Software Upgrade Fault", "severity": "MEDIUM", "health": "WARNING",  "metrics": {"packetLoss": 9}, "config": "DRIFT"},
+    "ROGUE_AUTOMATION":       {"type": "Rogue Automation",       "severity": "MEDIUM", "health": "WARNING",  "metrics": {"userLoad": 80, "latency": 120}, "config": "DRIFT"},
     "FALSE_ALARM":            {"type": "Suspected False Alarm",  "severity": "LOW",    "health": "GOOD",     "metrics": {"alarmCount": 1}},
 }
 DESCRIPTIONS = {
@@ -103,14 +103,15 @@ def post(path, body):
 
 
 def healthy_metrics():
-    return {"signalQuality": 95.0, "userLoad": 30.0, "latency": 25.0,
-            "packetLoss": 1.0, "alarmCount": 0, "energyUsage": 45.0, "healthStatus": "GOOD"}
+    return {"signalQuality": 95.0, "userLoad": 30.0, "latency": 25.0, "packetLoss": 1.0,
+            "alarmCount": 0, "energyUsage": 45.0, "healthStatus": "GOOD", "configStatus": "STABLE"}
 
 
 def apply_symptom(metrics, root_cause):
     arche = ARCHETYPES[root_cause]
     metrics.update(arche["metrics"])
     metrics["healthStatus"] = arche["health"]
+    metrics["configStatus"] = arche.get("config", "STABLE")
 
 
 def clamp(v, lo, hi):
@@ -153,7 +154,8 @@ def drift(metrics, rng):
 def cell_spec(name, m):
     return {"cellName": name, "signalQuality": m["signalQuality"], "userLoad": m["userLoad"],
             "latency": m["latency"], "packetLoss": m["packetLoss"], "alarmCount": int(m["alarmCount"]),
-            "energyUsage": m["energyUsage"], "healthStatus": m["healthStatus"]}
+            "energyUsage": m["energyUsage"], "healthStatus": m["healthStatus"],
+            "configStatus": m.get("configStatus", "STABLE")}
 
 
 def build_plan(session_id, cell_count):
@@ -204,6 +206,7 @@ def register_existing(sid):
         canonical[c["cellName"]] = {k: c[k] for k in ("signalQuality", "userLoad", "latency",
                                     "packetLoss", "alarmCount", "energyUsage")}
         canonical[c["cellName"]]["healthStatus"] = c["healthStatus"]
+        canonical[c["cellName"]]["configStatus"] = c["configStatus"]
     SESSIONS[sid] = {"cells": canonical, "players": players,
                      "rng": random.Random(sid * 7919), "tick": 0}
     print("[sim] re-registered existing session %d" % sid, flush=True)

@@ -13,7 +13,8 @@ public record CellResponse(
         double packetLoss,
         int alarmCount,
         double energyUsage,
-        String healthStatus
+        String healthStatus,
+        String configStatus
 ) {
     public static CellResponse from(NetworkCell c) {
         return new CellResponse(
@@ -26,6 +27,7 @@ public record CellResponse(
                 c.getPacketLoss(),
                 c.getAlarmCount(),
                 c.getEnergyUsage(),
-                c.getHealthStatus().name());
+                c.getHealthStatus().name(),
+                c.getConfigStatus().name());
     }
 }

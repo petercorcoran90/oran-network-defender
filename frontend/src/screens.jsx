@@ -163,6 +163,7 @@ function NetworkMapPage({ state, nav, route, store }) {
                   <div className="kv"><span className="k">User load</span><span className="v mono">{Math.round(selCell.userLoad)}%</span></div>
                   <div className="kv"><span className="k">Latency</span><span className="v mono">{Math.round(selCell.latency)} ms</span></div>
                   <div className="kv"><span className="k">Packet loss</span><span className="v mono">{Math.round(selCell.packetLoss)}%</span></div>
+                  <div className="kv"><span className="k">Config status</span><span className="v mono" style={{ color: selCell.configStatus && selCell.configStatus !== 'STABLE' ? 'var(--warn)' : 'inherit' }}>{selCell.configStatus || 'STABLE'}</span></div>
                   <div className="kv"><span className="k">Active incidents</span><span className="v mono">{selIncidents.length}</span></div>
                   {selIncidents.length > 0 && <div style={{ marginTop: 14 }}>
                     <div className="lbl" style={{ fontSize: 10.5, color: 'var(--text-3)', letterSpacing: '.08em', textTransform: 'uppercase', marginBottom: 8 }}>Open on this cell</div>

@@ -15,6 +15,7 @@ relative prefix **`/api`** (the Vite dev server proxies `/api` → `:8080`, so n
 | incident `status` | `OPEN`, `RESOLVED`, `FAILED` |
 | `severity` | `LOW`, `MEDIUM`, `HIGH` |
 | cell `healthStatus` | `GOOD`, `WARNING`, `CRITICAL` |
+| cell `configStatus` | `STABLE`, `CHANGED`, `DRIFT` |
 | action `result` | `SUCCESS`, `PARTIAL`, `FAILED` |
 
 ### Error responses
@@ -120,7 +121,7 @@ cells in the session. **Response 200 (`[ CellResponse, … ]`):**
 [ {
   "id": 75, "playerId": 19, "cellName": "Cell-01",
   "signalQuality": 95.0, "userLoad": 30.0, "latency": 25.0, "packetLoss": 1.0,
-  "alarmCount": 0, "energyUsage": 45.0, "healthStatus": "GOOD"
+  "alarmCount": 0, "energyUsage": 45.0, "healthStatus": "GOOD", "configStatus": "STABLE"
 } ]
 ```
 

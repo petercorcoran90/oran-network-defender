@@ -59,9 +59,21 @@ public class NetworkCell {
     @Column(name = "health_status", nullable = false, length = 16)
     private HealthStatus healthStatus = HealthStatus.GOOD;
 
+    // O-RAN configuration state of the cell (matches the brief's "configuration status" metric).
+    @Enumerated(EnumType.STRING)
+    @Column(name = "config_status", nullable = false, length = 16)
+    @org.hibernate.annotations.ColumnDefault("'STABLE'")
+    private ConfigStatus configStatus = ConfigStatus.STABLE;
+
     public enum HealthStatus {
         GOOD,
         WARNING,
         CRITICAL
+    }
+
+    public enum ConfigStatus {
+        STABLE,
+        CHANGED,
+        DRIFT
     }
 }
