@@ -55,6 +55,9 @@ function App() {
     return () => { unsub(); clearInterval(clock); store.stop(); };
   }, [store]);
 
+  // Each new match (new store) starts on the dashboard, not wherever the last game ended.
+  useEffect(() => { if (store) setRoute({ screen: 'dashboard', params: {} }); }, [store]);
+
   // apply visual tweaks
   useEffect(() => {
     const root = document.documentElement;

@@ -247,13 +247,14 @@ function Incidents({ state, nav }) {
 // ============================================================
 // 4 · INCIDENT DETAIL & ACTIONS
 // ============================================================
-function metricRow(label, value, unit, max, danger) {
-  const ratio = Math.min(1, value / max);
-  const col = ratio > 0.75 ? 'var(--crit)' : ratio > 0.5 ? 'var(--warn)' : 'var(--good)';
+function metricRow(label, value, unit, max, invert) {
+  const fill = Math.min(1, value / max);            // bar length reflects the value
+  const bad = invert ? 1 - fill : fill;             // "goodness" can be inverted (signal: high = good)
+  const col = bad > 0.75 ? 'var(--crit)' : bad > 0.5 ? 'var(--warn)' : 'var(--good)';
   return (
     <div className="metric" key={label}>
       <span className="ml">{label}</span>
-      <span className="mbar"><i style={{ width: ratio * 100 + '%', background: col }} /></span>
+      <span className="mbar"><i style={{ width: fill * 100 + '%', background: col }} /></span>
       <span className="mv" style={{ color: col }}>{value}{unit}</span>
     </div>
   );
@@ -323,7 +324,7 @@ function IncidentDetail({ state, store, nav, route }) {
             </div>
             <div style={{ marginTop: 14 }}>
               <div className="k" style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>Live Metrics</div>
-              {metricRow('Signal Quality', inc.metrics.signalQuality, '%', 100)}
+              {metricRow('Signal Quality', inc.metrics.signalQuality, '%', 100, true)}
               {metricRow('User Load', inc.metrics.userLoad, '%', 100)}
               {metricRow('Latency', inc.metrics.latency, 'ms', 200)}
               {metricRow('Packet Loss', inc.metrics.packetLoss, '%', 40)}
