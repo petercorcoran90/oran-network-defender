@@ -151,7 +151,7 @@ export function createBackendStore(conn) {
         rec: [], // recommended action is the hidden root cause — never sent to the client
         resolvedBy: inc.status === 'OPEN' ? null : 'a player',
       };
-    });
+    }).sort((a, b) => b.detectedAt - a.detectedAt); // newest first
 
     const resolvedCount = {};
     events.forEach((e) => { if (e.points > 0) resolvedCount[e.playerId] = (resolvedCount[e.playerId] || 0) + 1; });
@@ -201,10 +201,12 @@ export function createBackendStore(conn) {
   }
 
   async function applyAction(incidentId, actionId) {
+    let outcome = null;
     try {
-      await Api.submitAction(sessionId, Number(incidentId), playerId, Number(actionId));
+      outcome = await Api.submitAction(sessionId, Number(incidentId), playerId, Number(actionId));
     } catch { /* the refresh below reflects the server's truth either way */ }
     await refresh();
+    return outcome; // { result: SUCCESS|PARTIAL|FAILED, pointsAwarded, ... } or null
   }
 
   function acknowledge() { /* backend has no acknowledge step — no-op */ }

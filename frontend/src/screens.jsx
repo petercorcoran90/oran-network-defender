@@ -264,13 +264,36 @@ function IncidentDetail({ state, store, nav, route }) {
   const resolved = inc.status === 'resolved';
   const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
   const [flash, setFlash] = React.useState(null);
-  function apply(aid) { store.applyAction(inc.id, aid); setFlash(aid); }
+  const [outcome, setOutcome] = React.useState(null);
+  async function apply(aid) {
+    setFlash(aid);
+    const res = await store.applyAction(inc.id, aid);
+    if (res) setOutcome(res);
+  }
+  const OUTCOME = {
+    SUCCESS: { cls: 'good', icon: 'check', text: 'Correct fix — incident resolved.' },
+    FAILED: { cls: 'crit', icon: 'x', text: 'Wrong action — it backfired, the incident failed and the fault spread.' },
+    PARTIAL: { cls: 'warn', icon: 'alert', text: 'No effect — that action does not fix this incident. Try another.' },
+  };
   return (
     <div className="fade-in">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: 'var(--text-3)', fontSize: 12 }}>
         <span className="link" onClick={() => nav('incidents')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Icon name="back" size={14} /> Incidents</span>
         <Icon name="chevRight" size={12} /><span style={{ color: 'var(--text)' }}>{inc.id}</span>
       </div>
+
+      {outcome && (() => {
+        const o = OUTCOME[outcome.result] || OUTCOME.PARTIAL;
+        const c = o.cls === 'good' ? 'var(--good)' : o.cls === 'crit' ? 'var(--crit)' : 'var(--warn)';
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--gap)', padding: '11px 14px',
+            borderRadius: 'var(--r)', border: '1px solid ' + c, background: 'color-mix(in oklab,' + c + ' 12%, transparent)', color: c, fontSize: 13 }}>
+            <Icon name={o.icon} size={16} />
+            <span style={{ flex: 1, color: 'var(--text)' }}>{o.text}</span>
+            <b style={{ color: c }}>{outcome.pointsAwarded > 0 ? '+' : ''}{outcome.pointsAwarded} pts</b>
+          </div>
+        );
+      })()}
 
       <div className="panel" style={{ marginBottom: 'var(--gap)', borderLeft: '3px solid ' + SEV_COLOR[inc.severity] }}>
         <div className="panel-pad" style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
