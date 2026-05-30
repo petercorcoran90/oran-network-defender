@@ -40,6 +40,7 @@ function openTweaks() { window.postMessage({ type: '__activate_edit_mode' }, '*'
 
 function App() {
   const [conn, setConn] = useState(null); // real backend session: { user, session, playerId }
+  const [confirmLeave, setConfirmLeave] = useState(false);
   const store = useMemo(() => (conn ? createBackendStore(conn) : null), [conn]);
   const [, force] = useReducer((x) => x + 1, 0);
   const [route, setRoute] = useState({ screen: 'dashboard', params: {} });
@@ -124,7 +125,7 @@ function App() {
           <div className="online"><span className="dot" />ONLINE</div>
           <div className="chip" style={{ color: 'var(--accent)', borderColor: 'var(--accent-line)' }}><b>{state.score.toLocaleString()}</b> PTS</div>
           <button className="icon-btn" title="Fullscreen" onClick={() => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); }}><Icon name="expand" size={16} /></button>
-          <button className="icon-btn" title="Leave match" onClick={() => setConn(null)}><Icon name="x" size={16} /></button>
+          <button className="icon-btn" title="Leave match" onClick={() => setConfirmLeave(true)}><Icon name="x" size={16} /></button>
         </header>
         <main className="content">
           <Screen key={route.screen + (route.params.id || '')} state={state} store={store} nav={nav} route={route} openTweaks={openTweaks} />
@@ -150,6 +151,25 @@ function App() {
         <TweakSlider label="Sim speed" value={t.simSpeed} min={0} max={3} step={0.5} unit="×"
           onChange={(v) => setTweak('simSpeed', v)} />
       </TweaksPanel>
+
+      {confirmLeave && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'grid', placeItems: 'center', zIndex: 100 }}
+          onClick={() => setConfirmLeave(false)}>
+          <div className="panel" style={{ width: 'min(380px, 92vw)' }} onClick={(e) => e.stopPropagation()}>
+            <div className="panel-head"><h2>Leave match?</h2></div>
+            <div className="panel-pad">
+              <p style={{ color: 'var(--text-2)', marginTop: 0, fontSize: 13, lineHeight: 1.6 }}>
+                This ends the match for both players — your opponent will be shown the result. Are you sure?
+              </p>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button className="btn ghost" onClick={() => setConfirmLeave(false)}>Cancel</button>
+                <button className="btn" style={{ background: 'var(--crit)', borderColor: 'var(--crit)', color: '#fff', fontWeight: 600 }}
+                  onClick={async () => { await store.leave(); setConfirmLeave(false); setConn(null); }}>Leave match</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

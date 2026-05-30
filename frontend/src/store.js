@@ -54,17 +54,18 @@ const clampPct = (v) => Math.max(8, Math.min(92, v));
 // Deterministic scatter: place towers at seeded random spots, rejecting positions too close
 // to already-placed ones. Looks organic (no grid) and is stable across polls because it's
 // driven only by the (sorted) cell names.
-function scatterPositions(names) {
+function scatterPositions(names, seed) {
   const n = names.length || 1;
   const margin = 14;
   const span = 100 - margin * 2;
   const minDist = Math.max(14, (span / Math.sqrt(n)) * 0.55);
   const placed = [];
   names.forEach((name) => {
+    const key = seed + ':' + name; // per-session seed so each match is laid out differently
     let chosen = null;
     for (let attempt = 0; attempt < 40; attempt += 1) {
-      const x = margin + seededUnit(name, attempt * 2 + 1) * span;
-      const y = margin + seededUnit(name, attempt * 2 + 2) * span;
+      const x = margin + seededUnit(key, attempt * 2 + 1) * span;
+      const y = margin + seededUnit(key, attempt * 2 + 2) * span;
       if (!chosen) chosen = { x, y };
       if (placed.every((p) => Math.hypot(p.x - x, p.y - y) >= minDist)) {
         chosen = { x, y };
@@ -115,7 +116,7 @@ export function createBackendStore(conn) {
   function buildState(session, players, cells, incidents, events) {
     const sorted = [...cells].sort((a, b) => a.cellName.localeCompare(b.cellName));
     const nameById = {};
-    const positions = scatterPositions(sorted.map((c) => c.cellName));
+    const positions = scatterPositions(sorted.map((c) => c.cellName), session.sessionCode || String(session.id));
     const uiCells = sorted.map((c, i) => {
       nameById[c.id] = c.cellName;
       return {
@@ -212,6 +213,11 @@ export function createBackendStore(conn) {
 
   function acknowledge() { /* backend has no acknowledge step — no-op */ }
 
+  // Leave the match — ends the session so the opponent is shown the result too.
+  async function leave() {
+    try { await Api.leaveSession(sessionId, playerId); } catch { /* leaving anyway */ }
+  }
+
   function setConfig(patch) {
     state = { ...state, config: { ...state.config, ...patch }, version: state.version + 1 };
     notify();
@@ -231,6 +237,7 @@ export function createBackendStore(conn) {
     applyAction,
     acknowledge,
     setConfig,
+    leave,
     get ACTIONS() { return actions; },
     LINKS: [],
     stop() { clearInterval(timer); },

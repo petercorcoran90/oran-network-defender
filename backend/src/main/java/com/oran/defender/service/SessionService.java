@@ -114,6 +114,21 @@ public class SessionService {
     }
 
     /**
+     * A player leaves the match — this ends the session for everyone, so the other player's
+     * client sees it move to ENDED and is shown the result instead of being left in a dead game.
+     */
+    @Transactional
+    public GameSession leaveSession(Long sessionId, Long playerId) {
+        GameSession session = getSession(sessionId);
+        if (session.getStatus() != SessionStatus.ENDED) {
+            session.setStatus(SessionStatus.ENDED);
+            session.setEndedAt(Instant.now());
+            sessionRepository.save(session);
+        }
+        return session;
+    }
+
+    /**
      * Marks a player ready. Once both players in a full session are ready, the match
      * activates. (Clients run a short countdown off the resulting ACTIVE status.)
      */

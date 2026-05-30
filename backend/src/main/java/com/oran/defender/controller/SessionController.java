@@ -29,6 +29,7 @@ public class SessionController {
                                 String difficulty) {}
     record JoinSessionRequest(@NotNull Long userId, String teamName) {}
     record ReadyRequest(@NotNull Long playerId) {}
+    record LeaveRequest(@NotNull Long playerId) {}
 
     // Create a new game session (status = WAITING)
     @PostMapping
@@ -67,6 +68,12 @@ public class SessionController {
     @PostMapping("/{id}/ready")
     public SessionResponse ready(@PathVariable Long id, @Valid @RequestBody ReadyRequest req) {
         return SessionResponse.from(sessionService.markReady(id, req.playerId()));
+    }
+
+    // A player leaves — ends the match for both players
+    @PostMapping("/{id}/leave")
+    public SessionResponse leave(@PathVariable Long id, @Valid @RequestBody LeaveRequest req) {
+        return SessionResponse.from(sessionService.leaveSession(id, req.playerId()));
     }
 
     // Start the session — transitions status from WAITING to ACTIVE
