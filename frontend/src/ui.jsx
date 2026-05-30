@@ -104,29 +104,49 @@ function Topology({ cells, height = 360 }) {
     ['smo', 'nonrt', '', true],
     ['smo', 'odu', 'O1', true],
   ];
+  const [sel, setSel] = React.useState(null);
+  const DESC = {
+    smo: ['SMO', 'Service Management & Orchestration — the top layer that monitors, configures and optimises the whole RAN, and hosts the Non-RT RIC.'],
+    nonrt: ['Non-RT RIC', 'Non-Real-Time RAN Intelligent Controller — runs rApps for policy & analytics (loops slower than 1s), guiding the Near-RT RIC over the A1 interface.'],
+    nrt: ['Near-RT RIC', 'Near-Real-Time RIC — runs xApps for fast (10ms–1s) optimisation, steering the O-CU/O-DU over the E2 interface.'],
+    ocu: ['O-CU', 'O-RAN Central Unit — upper-layer baseband (RRC/PDCP). Connects to the O-DU over F1 and to the 5G core over NG (N2/N3).'],
+    odu: ['O-DU', 'O-RAN Distributed Unit — lower-layer baseband (RLC/MAC). Connects the O-RUs over the Open Fronthaul interface.'],
+    ru1: ['O-RU', 'O-RAN Radio Unit — the radio/antenna front end (RF + Low-PHY). Your network cells live here; its status reflects their health.'],
+    ru2: ['O-RU', 'O-RAN Radio Unit — the radio/antenna front end (RF + Low-PHY). Your network cells live here; its status reflects their health.'],
+    amf: ['AMF', '5G Core control plane — Access & Mobility Management Function (registration, mobility, session setup).'],
+    upf: ['UPF', '5G Core user plane — User Plane Function that carries subscriber data traffic.'],
+  };
   return (
-    <div className="topo" style={{ height }}>
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none">
-        {E.map(([a, b, , ctrl], i) => (
-          <line key={i} x1={N[a].x} y1={N[a].y} x2={N[b].x} y2={N[b].y}
-            stroke="rgba(120,200,150,.28)" strokeWidth=".4"
-            strokeDasharray={ctrl ? '1.5 1.5' : undefined} vectorEffect="non-scaling-stroke" />
+    <div>
+      <div className="topo" style={{ height }}>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+          {E.map(([a, b, , ctrl], i) => (
+            <line key={i} x1={N[a].x} y1={N[a].y} x2={N[b].x} y2={N[b].y}
+              stroke="rgba(120,200,150,.28)" strokeWidth=".4"
+              strokeDasharray={ctrl ? '1.5 1.5' : undefined} vectorEffect="non-scaling-stroke" />
+          ))}
+        </svg>
+        {E.filter(([, , lbl]) => lbl).map(([a, b, lbl], i) => (
+          <span key={'l' + i} style={{
+            position: 'absolute', left: (N[a].x + N[b].x) / 2 + '%', top: (N[a].y + N[b].y) / 2 + '%',
+            transform: 'translate(-50%,-50%)', fontSize: 9, letterSpacing: '.04em', color: 'var(--text-3)',
+            background: 'var(--panel)', padding: '0 4px', borderRadius: 2, whiteSpace: 'nowrap', pointerEvents: 'none',
+          }}>{lbl}</span>
         ))}
-      </svg>
-      {E.filter(([, , lbl]) => lbl).map(([a, b, lbl], i) => (
-        <span key={'l' + i} style={{
-          position: 'absolute', left: (N[a].x + N[b].x) / 2 + '%', top: (N[a].y + N[b].y) / 2 + '%',
-          transform: 'translate(-50%,-50%)', fontSize: 9, letterSpacing: '.04em', color: 'var(--text-3)',
-          background: 'var(--panel)', padding: '0 4px', borderRadius: 2, whiteSpace: 'nowrap', pointerEvents: 'none',
-        }}>{lbl}</span>
-      ))}
-      {Object.entries(N).map(([k, n]) => (
-        <div key={k} className="topo-node" style={{ left: n.x + '%', top: n.y + '%' }}>
-          <span className="stat-dot" style={{ background: STATUS_COLOR[n.st], boxShadow: '0 0 7px ' + STATUS_COLOR[n.st] }} />
-          <div className="tn">{n.label}</div>
-          <div className="ts">{n.sub}</div>
-        </div>
-      ))}
+        {Object.entries(N).map(([k, n]) => (
+          <div key={k} className="topo-node" onClick={() => setSel(k)}
+            style={{ left: n.x + '%', top: n.y + '%', borderColor: sel === k ? 'var(--accent)' : undefined }}>
+            <span className="stat-dot" style={{ background: STATUS_COLOR[n.st], boxShadow: '0 0 7px ' + STATUS_COLOR[n.st] }} />
+            <div className="tn">{n.label}</div>
+            <div className="ts">{n.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 12, padding: '11px 13px', background: 'var(--inset)', border: '1px solid var(--hair)', borderRadius: 'var(--r)', fontSize: 12.5, color: 'var(--text-2)', lineHeight: 1.55 }}>
+        {sel
+          ? <><b style={{ color: 'var(--text)' }}>{DESC[sel][0]}</b> — {DESC[sel][1]}</>
+          : <span style={{ color: 'var(--text-3)' }}>Click a component to see what it does in the O-RAN architecture.</span>}
+      </div>
     </div>
   );
 }
