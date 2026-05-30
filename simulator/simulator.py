@@ -33,6 +33,9 @@ CELL_COUNT = int(os.environ.get("CELL_COUNT", "6"))
 # Difficulty (set on the session at creation) -> number of towers.
 DIFFICULTY_CELLS = {"EASY": 3, "MEDIUM": 6, "HARD": 9}
 DRIFT_EVERY = int(os.environ.get("DRIFT_EVERY_TICKS", "2"))
+# A single tower can hold this many simultaneous open incidents (lets the count exceed the
+# number of towers, so the board can stay busy on hard/long games).
+PER_CELL_MAX = int(os.environ.get("PER_CELL_MAX", "2"))
 # Difficulty ramp: new incidents arrive this many ticks apart early -> late in the match.
 SPAWN_TICKS_EARLY = int(os.environ.get("SPAWN_TICKS_EARLY", "4"))
 SPAWN_TICKS_LATE = int(os.environ.get("SPAWN_TICKS_LATE", "1"))
@@ -205,18 +208,21 @@ def push_metrics(sid, state, name):
             post("/api/internal/cells/%d/metrics" % cell_id, cell_spec(name, m))
 
 
-def open_busy_cells(sid, state):
-    """Cell names that currently have an OPEN incident for EITHER player — read live from
-    the backend, so a cell frees up once both players resolve it (and we never stack a
-    second incident on a player who hasn't dealt with the first)."""
-    busy = set()
+def open_state(sid, state):
+    """Per-cell max open-incident count across both players, plus each player's total open
+    load. Read live from the backend, so cells free up as incidents get resolved."""
+    per_player = []
     for pid, name_to_id in state["players"].items():
         id_to_name = {cid: n for n, cid in name_to_id.items()}
+        counts = {}
         for inc in (get("/api/sessions/%d/incidents?playerId=%d&status=OPEN" % (sid, pid)) or []):
             name = id_to_name.get(inc["cellId"])
             if name:
-                busy.add(name)
-    return busy
+                counts[name] = counts.get(name, 0) + 1
+        per_player.append(counts)
+    merged = {n: max((c.get(n, 0) for c in per_player), default=0) for n in state["cells"]}
+    load = max((sum(c.values()) for c in per_player), default=0)
+    return merged, load
 
 
 def tick_session(session):
@@ -226,26 +232,27 @@ def tick_session(session):
     state["tick"] += 1
     tick = state["tick"]
     frac = elapsed_fraction(session)
-    busy = open_busy_cells(sid, state)
+    merged, load = open_state(sid, state)
 
     if tick % DRIFT_EVERY == 0:
         for name in state["cells"]:
-            if name in busy:
-                continue  # keep incident evidence stable until it's dealt with
+            if merged[name] > 0:
+                continue  # keep incident evidence stable while a cell has an open incident
             drift(state["cells"][name], rng)
             push_metrics(sid, state, name)
 
-    # Difficulty + time ramp: aim for more simultaneous open incidents on bigger/later
-    # games, spawned closer together as the clock runs down. HIGH-severity root causes
-    # only enter the pool past the midpoint.
+    # Difficulty + time ramp: target a growing number of simultaneous open incidents — NOT
+    # bounded by tower count, since a tower can hold up to PER_CELL_MAX. New incidents arrive
+    # closer together as the clock runs down; HIGH-severity root causes enter past the midpoint.
     cell_count = len(state["cells"])
-    target = max(2, round(cell_count * (0.3 + 0.6 * frac)))
+    target = max(2, round(cell_count * (0.4 + 0.8 * frac)))
     interval = max(SPAWN_TICKS_LATE, round(SPAWN_TICKS_EARLY - (SPAWN_TICKS_EARLY - SPAWN_TICKS_LATE) * frac))
     pool = EARLY_KEYS if frac < 0.4 else ALL_KEYS
-    if tick % interval == 0 and len(busy) < target:
-        free = [n for n in state["cells"] if n not in busy]
-        if free:
-            name = rng.choice(free)
+    if tick % interval == 0 and load < target:
+        candidates = [n for n in state["cells"] if merged[n] < PER_CELL_MAX]
+        if candidates:
+            fewest = min(merged[n] for n in candidates)
+            name = rng.choice([n for n in candidates if merged[n] == fewest])
             rc = rng.choice(pool)
             apply_symptom(state["cells"][name], rc)
             push_metrics(sid, state, name)
@@ -253,8 +260,8 @@ def tick_session(session):
                 post("/api/internal/sessions/%d/incidents" % sid,
                      {"playerId": pid, "cellId": name_to_id[name], "incidentType": ARCHETYPES[rc]["type"],
                       "severity": ARCHETYPES[rc]["severity"], "rootCause": rc, "description": DESCRIPTIONS[rc]})
-            print("[sim] new incident on %s (session %d, frac=%.2f, open->%d/%d)"
-                  % (name, sid, frac, len(busy) + 1, target), flush=True)
+            print("[sim] new incident on %s (session %d, frac=%.2f, load->%d/%d)"
+                  % (name, sid, frac, load + 1, target), flush=True)
 
 
 def loop_once():
