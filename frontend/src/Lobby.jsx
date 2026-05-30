@@ -44,6 +44,9 @@ export default function Lobby({ onEnter }) {
   // join
   const [sessions, setSessions] = useState([]);
 
+  // high scores
+  const [scores, setScores] = useState([]);
+
   // room
   const [session, setSession] = useState(null);      // GameSession
   const [playerId, setPlayerId] = useState(null);
@@ -68,6 +71,13 @@ export default function Lobby({ onEnter }) {
       setUser(u);
       setMatchName(`${u.username}'s match`);
       setStep('choose');
+    }).catch(() => {});
+  }
+
+  async function loadScores() {
+    await run(async () => {
+      setScores(await Api.getHighScores());
+      setStep('scores');
     }).catch(() => {});
   }
 
@@ -143,10 +153,10 @@ export default function Lobby({ onEnter }) {
 
   return (
     <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, position: 'relative', zIndex: 1 }}>
-      <div className="panel" style={{ width: 'min(460px, 94vw)' }}>
+      <div className="panel" style={{ width: step === 'scores' ? 'min(640px, 96vw)' : 'min(460px, 94vw)' }}>
         <div className="panel-head">
           <h2>O-RAN Network Defender</h2>
-          <span className="corner">{step === 'room' ? 'MATCH LOBBY' : 'CONNECT'}</span>
+          <span className="corner">{step === 'room' ? 'MATCH LOBBY' : step === 'scores' ? 'TOP SCORERS' : 'CONNECT'}</span>
         </div>
         <div className="panel-pad">
 
@@ -162,6 +172,32 @@ export default function Lobby({ onEnter }) {
               <button className="btn primary" disabled={busy || !username.trim()} onClick={identify}>
                 {busy ? 'Connecting…' : 'Continue'}
               </button>
+              <button className="btn ghost" disabled={busy} onClick={loadScores} style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}>
+                🏆 Top scorers
+              </button>
+            </>
+          )}
+
+          {step === 'scores' && (
+            <>
+              <p style={{ color: 'var(--text-2)', marginTop: 0, fontSize: 12.5 }}>Top matches by winning score.</p>
+              {scores.length === 0 ? <div className="empty">No completed matches yet.</div> : (
+                <table>
+                  <thead><tr><th>Player</th><th>Score</th><th>Difficulty</th><th>Length</th><th>Beat</th></tr></thead>
+                  <tbody>
+                    {scores.map((s, i) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 600 }}>{s.winnerName}</td>
+                        <td className="mono">{s.winnerScore.toLocaleString()}</td>
+                        <td className="mono" style={{ textTransform: 'capitalize' }}>{s.difficulty.toLowerCase()}</td>
+                        <td className="mono">{Math.round(s.durationSeconds / 60)}m</td>
+                        <td>{s.loserName}{s.forfeit && <span className="tag muted" style={{ marginLeft: 6 }}>forfeit</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <button className="btn ghost" onClick={() => setStep('identify')} style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}>Back</button>
             </>
           )}
 

@@ -6,9 +6,11 @@ import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.AppUser;
 import com.oran.defender.model.GameSession;
 import com.oran.defender.model.GameSession.SessionStatus;
+import com.oran.defender.model.MatchResult;
 import com.oran.defender.model.Player;
 import com.oran.defender.repository.AppUserRepository;
 import com.oran.defender.repository.GameSessionRepository;
+import com.oran.defender.repository.MatchResultRepository;
 import com.oran.defender.repository.PlayerRepository;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -30,14 +32,17 @@ public class SessionService {
     private final GameSessionRepository sessionRepository;
     private final PlayerRepository playerRepository;
     private final AppUserRepository userRepository;
+    private final MatchResultRepository matchResultRepository;
     private final SecureRandom random = new SecureRandom();
 
     public SessionService(GameSessionRepository sessionRepository,
                           PlayerRepository playerRepository,
-                          AppUserRepository userRepository) {
+                          AppUserRepository userRepository,
+                          MatchResultRepository matchResultRepository) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.userRepository = userRepository;
+        this.matchResultRepository = matchResultRepository;
     }
 
     @Transactional
@@ -123,7 +128,9 @@ public class SessionService {
         if (session.getStatus() != SessionStatus.ENDED) {
             session.setStatus(SessionStatus.ENDED);
             session.setEndedAt(Instant.now());
+            session.setForfeitedByPlayerId(playerId); // ragequit = automatic forfeit
             sessionRepository.save(session);
+            recordResult(session, playerId);
         }
         return session;
     }
@@ -198,8 +205,42 @@ public class SessionService {
                 && Instant.now().isAfter(session.getEndedAt())) {
             session.setStatus(SessionStatus.ENDED);
             sessionRepository.save(session);
+            recordResult(session, null); // timer expiry — winner decided by score
         }
         return session;
+    }
+
+    /**
+     * Persist the match result once (idempotent per session). On a forfeit the non-leaver
+     * wins regardless of score; otherwise the higher score wins. Only records real matches
+     * that actually started with two players.
+     */
+    private void recordResult(GameSession session, Long forfeitLoserId) {
+        if (session.getStartedAt() == null || matchResultRepository.existsByGameSessionId(session.getId())) {
+            return;
+        }
+        List<Player> players = playerRepository.findByGameSessionIdOrderByScoreDesc(session.getId());
+        if (players.size() < 2) {
+            return;
+        }
+        Player winner;
+        Player loser;
+        if (forfeitLoserId != null) {
+            loser = players.stream().filter(p -> p.getId().equals(forfeitLoserId)).findFirst().orElse(players.get(1));
+            winner = players.stream().filter(p -> !p.getId().equals(forfeitLoserId)).findFirst().orElse(players.get(0));
+        } else {
+            winner = players.get(0); // sorted by score desc
+            loser = players.get(1);
+        }
+        MatchResult result = new MatchResult();
+        result.setGameSessionId(session.getId());
+        result.setWinnerName(winner.getTeamName());
+        result.setWinnerScore(winner.getScore());
+        result.setLoserName(loser.getTeamName());
+        result.setDifficulty(session.getDifficulty().name());
+        result.setDurationSeconds(session.getDurationSeconds());
+        result.setForfeit(forfeitLoserId != null);
+        matchResultRepository.save(result);
     }
 
     private String generateUniqueCode() {

@@ -53,6 +53,10 @@ public class GameSession {
     @Column(name = "ended_at")
     private Instant endedAt;
 
+    // Set when a player ragequits — that player forfeits, the other wins regardless of score.
+    @Column(name = "forfeited_by_player_id")
+    private Long forfeitedByPlayerId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_user_id")
     private AppUser createdByUser;

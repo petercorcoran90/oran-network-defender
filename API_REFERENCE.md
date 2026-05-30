@@ -71,9 +71,10 @@ Logs in by username, registering on first use (no "name taken" error). **Request
 {
   "id": 5, "sessionCode": "L5Y9FS", "name": "Friday match", "status": "WAITING",
   "durationSeconds": 600, "difficulty": "MEDIUM",
-  "startedAt": null, "endedAt": null, "createdByUserId": 1
+  "startedAt": null, "endedAt": null, "forfeitedByPlayerId": null, "createdByUserId": 1
 }
 ```
+> `forfeitedByPlayerId` is set if a player left mid-match (ragequit) — that player forfeits and the other wins regardless of score.
 
 ### `GET /api/sessions`
 All sessions with status `WAITING` or `ACTIVE`. **Response 200:** `[ SessionResponse, … ]`.
@@ -99,6 +100,10 @@ Marks a player ready; when **both** players are ready the match activates. **Req
 { "playerId": 7 }
 ```
 **Response 200:** the `SessionResponse` (its `status` becomes `ACTIVE` once both are ready).
+
+### `POST /api/sessions/{id}/leave`
+A player leaves mid-match — **ends the session for both** (the leaver forfeits). **Request:**
+`{ "playerId": 7 }` → **200** `SessionResponse` (status `ENDED`, `forfeitedByPlayerId` set).
 
 ### `POST /api/sessions/{id}/start`
 Manual start (needs 2 players). **Response 200:** `SessionResponse`. (The lobby uses `ready`.)
@@ -195,6 +200,19 @@ The 9 remediation actions and their ids (use the `id` in the submit-action call)
 ```
 Full list: `REBALANCE_TRAFFIC`, `RESTART_CELL`, `ROLLBACK_CONFIG`, `ROLLBACK_SOFTWARE`,
 `INCREASE_TRANSMIT_POWER`, `FILTER_ALARMS`, `DISABLE_AUTOMATION`, `ESCALATE`, `IGNORE`.
+
+---
+
+## High scores
+
+### `GET /api/highscores`
+Top 20 finished matches by winner score. **Response 200:**
+```json
+[ { "winnerName": "alice", "winnerScore": 740, "loserName": "bob",
+    "difficulty": "HARD", "durationSeconds": 600, "forfeit": false,
+    "createdAt": "2026-05-30T18:00:00Z" } ]
+```
+A result is recorded once per session when it ends (timer expiry or forfeit).
 
 ---
 

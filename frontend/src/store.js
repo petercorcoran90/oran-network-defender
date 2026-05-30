@@ -100,6 +100,7 @@ function emptyState(conn) {
     players: [], teams: [],
     sessionStatus: conn.session.status,
     endsAt: conn.session.endedAt ? Date.parse(conn.session.endedAt) : null,
+    forfeitedBy: conn.session.forfeitedByPlayerId ?? null,
     config: { difficulty: 'normal', simSpeed: 1 },
     version: 0,
   };
@@ -183,6 +184,7 @@ export function createBackendStore(conn) {
       players: uiPlayers, teams: uiTeams,
       sessionStatus: session.status,
       endsAt: session.endedAt ? Date.parse(session.endedAt) : null,
+      forfeitedBy: session.forfeitedByPlayerId ?? null,
       config: state.config,
       version: state.version + 1,
     };

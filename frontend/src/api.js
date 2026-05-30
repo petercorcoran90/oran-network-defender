@@ -36,6 +36,9 @@ export const Api = {
   // --- action catalog ---
   getActions: () => request('/actions'),
 
+  // --- high scores ---
+  getHighScores: () => request('/highscores'),
+
   // --- users ---
   createUser: (username, role = 'PLAYER') =>
     request('/users', { method: 'POST', body: { username, role } }),

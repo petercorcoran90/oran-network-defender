@@ -10,9 +10,22 @@ import { Selectors } from './store.js';
 export default function GameOver({ state, onExit }) {
   const players = [...state.players].sort((a, b) => b.score - a.score);
   const me = state.players.find((p) => p.you);
-  const top = players[0];
-  const draw = players.length > 1 && players[0].score === players[1].score;
-  const youWon = me && top && me.id === top.id && !draw;
+  const forfeitedBy = state.forfeitedBy;
+
+  let draw;
+  let winnerId;
+  let youWon;
+  if (forfeitedBy != null) {
+    // Ragequit: whoever didn't leave wins, regardless of score.
+    draw = false;
+    const w = state.players.find((p) => p.id !== forfeitedBy);
+    winnerId = w ? w.id : null;
+    youWon = !!(me && me.id !== forfeitedBy);
+  } else {
+    draw = players.length > 1 && players[0].score === players[1].score;
+    winnerId = draw ? null : players[0].id;
+    youWon = !!(me && winnerId === me.id);
+  }
 
   const banner = draw ? 'DRAW' : youWon ? 'YOU WIN' : 'YOU LOSE';
   const bannerColor = draw ? 'var(--warn)' : youWon ? 'var(--good)' : 'var(--crit)';
@@ -41,11 +54,16 @@ export default function GameOver({ state, onExit }) {
         <div className="panel-pad">
           <div style={{ textAlign: 'center', margin: '6px 0 18px' }}>
             <div style={{ fontFamily: 'var(--font-head)', fontSize: 40, fontWeight: 700, color: bannerColor, letterSpacing: '.04em' }}>{banner}</div>
+            {forfeitedBy != null && (
+              <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 4 }}>
+                {youWon ? 'Your opponent forfeited the match.' : 'You forfeited the match.'}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
             {players.map((p, i) => {
-              const winner = !draw && i === 0;
+              const winner = p.id === winnerId;
               return (
                 <div key={p.id} className="inc-mini"
                   style={{ borderLeftColor: winner ? 'var(--good)' : 'var(--hair)', background: p.you ? 'var(--accent-soft)' : 'var(--inset)' }}>

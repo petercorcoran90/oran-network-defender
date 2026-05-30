@@ -13,6 +13,7 @@ public record SessionResponse(
         String difficulty,
         Instant startedAt,
         Instant endedAt,
+        Long forfeitedByPlayerId,
         Long createdByUserId
 ) {
     public static SessionResponse from(GameSession s) {
@@ -25,6 +26,7 @@ public record SessionResponse(
                 s.getDifficulty().name(),
                 s.getStartedAt(),
                 s.getEndedAt(),
+                s.getForfeitedByPlayerId(),
                 s.getCreatedByUser() != null ? s.getCreatedByUser().getId() : null);
     }
 }
