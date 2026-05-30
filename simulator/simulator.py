@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 
 BACKEND = os.environ.get("BACKEND_URL", "http://localhost:8080").rstrip("/")
 TOKEN = os.environ.get("SIM_INGEST_TOKEN", "")
-POLL_SECONDS = float(os.environ.get("POLL_SECONDS", "3"))
+POLL_SECONDS = float(os.environ.get("POLL_SECONDS", "2"))
 CELL_COUNT = int(os.environ.get("CELL_COUNT", "6"))
 # Difficulty (set on the session at creation) -> number of towers.
 DIFFICULTY_CELLS = {"EASY": 3, "MEDIUM": 6, "HARD": 9}
@@ -36,10 +36,10 @@ DRIFT_EVERY = int(os.environ.get("DRIFT_EVERY_TICKS", "2"))
 # A single tower can hold this many simultaneous open incidents (lets the count exceed the
 # number of towers, so the board can stay busy on hard/long games).
 PER_CELL_MAX = int(os.environ.get("PER_CELL_MAX", "2"))
-# Difficulty ramp: new incidents arrive this many ticks apart early -> late in the match.
-SPAWN_TICKS_EARLY = int(os.environ.get("SPAWN_TICKS_EARLY", "4"))
-SPAWN_TICKS_LATE = int(os.environ.get("SPAWN_TICKS_LATE", "1"))
 INITIAL_INCIDENTS = int(os.environ.get("INITIAL_INCIDENTS", "2"))
+# Up to this many new incidents per tick while the board is below its target load — keeps a
+# skilled player who clears incidents quickly from running out of things to do.
+REFILL_PER_TICK = int(os.environ.get("REFILL_PER_TICK", "3"))
 
 # rootCause -> how it presents. rootCause values must match the backend RootCause enum.
 ARCHETYPES = {
@@ -66,6 +66,16 @@ DESCRIPTIONS = {
 # Difficulty pools: easier root causes early; the full set (incl. HIGH severity) later.
 EARLY_KEYS = [k for k, v in ARCHETYPES.items() if v["severity"] in ("LOW", "MEDIUM")]
 ALL_KEYS = list(ARCHETYPES)
+
+
+def severity_pool(difficulty, frac):
+    """Which root causes can spawn. HARD gets HIGH-severity incidents from the start;
+    MEDIUM brings them in past the midpoint; EASY stays low/medium."""
+    if difficulty == "EASY":
+        return EARLY_KEYS
+    if difficulty == "HARD":
+        return ALL_KEYS
+    return EARLY_KEYS if frac < 0.4 else ALL_KEYS
 
 # in-memory state per session: { cells: {name: metrics}, players: {pid: {name: cellId}},
 #                                incident_cells: set(name), rng, tick }
@@ -241,27 +251,32 @@ def tick_session(session):
             drift(state["cells"][name], rng)
             push_metrics(sid, state, name)
 
-    # Difficulty + time ramp: target a growing number of simultaneous open incidents — NOT
-    # bounded by tower count, since a tower can hold up to PER_CELL_MAX. New incidents arrive
-    # closer together as the clock runs down; HIGH-severity root causes enter past the midpoint.
+    # Difficulty + time ramp: keep the board topped up to a target that grows with tower
+    # count and elapsed time (not bounded by tower count — a tower holds up to PER_CELL_MAX).
+    # Refilling each tick means clearing incidents fast just brings more, instead of idling.
+    difficulty = session.get("difficulty", "MEDIUM")
     cell_count = len(state["cells"])
     target = max(2, round(cell_count * (0.4 + 0.8 * frac)))
-    interval = max(SPAWN_TICKS_LATE, round(SPAWN_TICKS_EARLY - (SPAWN_TICKS_EARLY - SPAWN_TICKS_LATE) * frac))
-    pool = EARLY_KEYS if frac < 0.4 else ALL_KEYS
-    if tick % interval == 0 and load < target:
+    pool = severity_pool(difficulty, frac)
+    spawned = 0
+    while load + spawned < target and spawned < REFILL_PER_TICK:
         candidates = [n for n in state["cells"] if merged[n] < PER_CELL_MAX]
-        if candidates:
-            fewest = min(merged[n] for n in candidates)
-            name = rng.choice([n for n in candidates if merged[n] == fewest])
-            rc = rng.choice(pool)
-            apply_symptom(state["cells"][name], rc)
-            push_metrics(sid, state, name)
-            for pid, name_to_id in state["players"].items():
-                post("/api/internal/sessions/%d/incidents" % sid,
-                     {"playerId": pid, "cellId": name_to_id[name], "incidentType": ARCHETYPES[rc]["type"],
-                      "severity": ARCHETYPES[rc]["severity"], "rootCause": rc, "description": DESCRIPTIONS[rc]})
-            print("[sim] new incident on %s (session %d, frac=%.2f, load->%d/%d)"
-                  % (name, sid, frac, load + 1, target), flush=True)
+        if not candidates:
+            break
+        fewest = min(merged[n] for n in candidates)
+        name = rng.choice([n for n in candidates if merged[n] == fewest])
+        rc = rng.choice(pool)
+        apply_symptom(state["cells"][name], rc)
+        push_metrics(sid, state, name)
+        for pid, name_to_id in state["players"].items():
+            post("/api/internal/sessions/%d/incidents" % sid,
+                 {"playerId": pid, "cellId": name_to_id[name], "incidentType": ARCHETYPES[rc]["type"],
+                  "severity": ARCHETYPES[rc]["severity"], "rootCause": rc, "description": DESCRIPTIONS[rc]})
+        merged[name] += 1
+        spawned += 1
+    if spawned:
+        print("[sim] +%d incident(s) (session %d, frac=%.2f, load->%d/%d, diff=%s)"
+              % (spawned, sid, frac, load + spawned, target, difficulty), flush=True)
 
 
 def loop_once():
@@ -269,6 +284,8 @@ def loop_once():
     for s in sessions:
         if s["status"] != "ACTIVE":
             continue
+        if elapsed_fraction(s) >= 1.0:
+            continue  # match is over (timer elapsed) — leave it alone
         sid = s["id"]
         if sid in SESSIONS:
             tick_session(s)

@@ -65,9 +65,14 @@ public class SessionService {
         }
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<GameSession> listActiveSessions() {
-        return sessionRepository.findByStatusIn(List.of(SessionStatus.WAITING, SessionStatus.ACTIVE));
+        // Lazily end any whose timer has elapsed so they drop out of the list (otherwise an
+        // expired ACTIVE session lingers forever and the simulator keeps maintaining it).
+        return sessionRepository.findByStatusIn(List.of(SessionStatus.WAITING, SessionStatus.ACTIVE)).stream()
+                .map(this::endIfExpired)
+                .filter(s -> s.getStatus() != SessionStatus.ENDED)
+                .toList();
     }
 
     @Transactional
