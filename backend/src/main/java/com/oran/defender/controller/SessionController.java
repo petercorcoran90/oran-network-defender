@@ -49,6 +49,12 @@ public class SessionController {
         return SessionResponse.from(sessionService.getSession(id));
     }
 
+    // Look up a session by its share code (for join-by-code)
+    @GetMapping("/code/{code}")
+    public SessionResponse getByCode(@PathVariable String code) {
+        return SessionResponse.from(sessionService.getByCode(code));
+    }
+
     // Join an existing session (creates a Player record)
     @PostMapping("/{id}/join")
     @ResponseStatus(HttpStatus.CREATED)

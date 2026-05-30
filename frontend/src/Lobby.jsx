@@ -37,8 +37,9 @@ export default function Lobby({ onEnter }) {
 
   // create form
   const [matchName, setMatchName] = useState('');
-  const [duration, setDuration] = useState(300);
+  const [minutes, setMinutes] = useState(5);
   const [difficulty, setDifficulty] = useState('MEDIUM');
+  const [joinCode, setJoinCode] = useState('');
 
   // join
   const [sessions, setSessions] = useState([]);
@@ -73,7 +74,7 @@ export default function Lobby({ onEnter }) {
   // --- create + auto-join as the creator ---
   async function createMatch() {
     await run(async () => {
-      const s = await Api.createSession(matchName.trim() || `${user.username}'s match`, user.id, Number(duration), difficulty);
+      const s = await Api.createSession(matchName.trim() || `${user.username}'s match`, user.id, Number(minutes) * 60, difficulty);
       const me = await Api.joinSession(s.id, user.id, user.username);
       setSession(s); setPlayerId(me.id); setStep('room');
     }).catch(() => {});
@@ -90,6 +91,15 @@ export default function Lobby({ onEnter }) {
 
   async function joinMatch(s) {
     await run(async () => {
+      const me = await Api.joinSession(s.id, user.id, user.username);
+      setSession(s); setPlayerId(me.id); setStep('room');
+    }).catch(() => {});
+  }
+
+  async function joinByCode() {
+    if (!joinCode.trim()) return;
+    await run(async () => {
+      const s = await Api.getSessionByCode(joinCode.trim());
       const me = await Api.joinSession(s.id, user.id, user.username);
       setSession(s); setPlayerId(me.id); setStep('room');
     }).catch(() => {});
@@ -164,8 +174,10 @@ export default function Lobby({ onEnter }) {
                 <Field label="Match name">
                   <input style={inputStyle} value={matchName} onChange={(e) => setMatchName(e.target.value)} />
                 </Field>
-                <Field label="Duration (seconds)">
-                  <input style={inputStyle} type="number" min={30} value={duration} onChange={(e) => setDuration(e.target.value)} />
+                <Field label={`Match length · ${minutes} min`}>
+                  <input type="range" min={1} max={15} step={1} value={minutes}
+                    onChange={(e) => setMinutes(Number(e.target.value))}
+                    style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }} />
                 </Field>
                 <Field label="Difficulty">
                   <div className="seg" style={{ width: '100%' }}>
@@ -176,7 +188,16 @@ export default function Lobby({ onEnter }) {
                 </Field>
                 <button className="btn primary" disabled={busy} onClick={createMatch}>{busy ? 'Working…' : 'Create match'}</button>
               </div>
-              <button className="btn ghost" disabled={busy} onClick={loadSessions} style={{ width: '100%', justifyContent: 'center' }}>Join an existing match</button>
+              <div className="panel" style={{ background: 'var(--inset)', padding: 'var(--pad)', marginBottom: 14 }}>
+                <Field label="Join with a match code">
+                  <input style={inputStyle} value={joinCode} maxLength={6}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && joinByCode()}
+                    placeholder="e.g. L5Y9FS" />
+                </Field>
+                <button className="btn" disabled={busy || !joinCode.trim()} onClick={joinByCode}>Join match</button>
+              </div>
+              <button className="btn ghost" disabled={busy} onClick={loadSessions} style={{ width: '100%', justifyContent: 'center' }}>Or browse open matches</button>
             </>
           )}
 

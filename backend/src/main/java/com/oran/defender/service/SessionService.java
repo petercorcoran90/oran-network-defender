@@ -83,6 +83,13 @@ public class SessionService {
     }
 
     @Transactional
+    public GameSession getByCode(String code) {
+        GameSession session = sessionRepository.findBySessionCode(code.trim().toUpperCase())
+                .orElseThrow(() -> new NotFoundException("No match with that code"));
+        return endIfExpired(session);
+    }
+
+    @Transactional
     public Player joinSession(Long sessionId, Long userId, String teamName) {
         GameSession session = getSession(sessionId);
         if (session.getStatus() != SessionStatus.WAITING) {
