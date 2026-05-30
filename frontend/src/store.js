@@ -142,7 +142,7 @@ export function createBackendStore(conn) {
         type: inc.incidentType,
         cellId: nameById[inc.cellId] || ('Cell ' + inc.cellId),
         severity: inc.severity.toLowerCase(),
-        status: inc.status === 'OPEN' ? 'open' : 'resolved',
+        status: inc.status.toLowerCase(), // open | resolved | failed
         detectedAt: Date.parse(inc.createdAt),
         description: inc.description,
         metrics: cell

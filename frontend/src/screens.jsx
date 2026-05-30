@@ -261,7 +261,8 @@ function IncidentDetail({ state, store, nav, route }) {
   const inc = state.incidents.find((i) => i.id === route.params.id);
   if (!inc) return <div className="empty">Incident not found. <span className="link" onClick={() => nav('incidents')}>Back to list</span></div>;
   const cell = state.cells.find((c) => c.id === inc.cellId);
-  const resolved = inc.status === 'resolved';
+  const closed = inc.status !== 'open'; // resolved OR failed — no more actions either way
+  const failed = inc.status === 'failed';
   const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
   const [flash, setFlash] = React.useState(null);
   const [outcome, setOutcome] = React.useState(null);
@@ -302,8 +303,9 @@ function IncidentDetail({ state, store, nav, route }) {
             <div style={{ fontFamily: 'var(--font-head)', fontSize: 20, fontWeight: 600 }}>{inc.title}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6 }}><SevTag sev={inc.severity} /><StatusTag status={inc.status} /><span className="id" style={{ alignSelf: 'center' }}>{inc.id}</span></div>
           </div>
-          {!resolved && inc.status === 'open' && <button className="btn" onClick={() => store.acknowledge(inc.id)}><Icon name="bell" size={14} /> Acknowledge</button>}
-          {resolved && <span className="tag good" style={{ fontSize: 12, padding: '6px 12px' }}><Icon name="check" size={13} /> Resolved by {inc.resolvedBy}</span>}
+          {inc.status === 'open' && <button className="btn" onClick={() => store.acknowledge(inc.id)}><Icon name="bell" size={14} /> Acknowledge</button>}
+          {inc.status === 'resolved' && <span className="tag good" style={{ fontSize: 12, padding: '6px 12px' }}><Icon name="check" size={13} /> Resolved</span>}
+          {failed && <span className="tag crit" style={{ fontSize: 12, padding: '6px 12px' }}><Icon name="x" size={13} /> Failed — wrong action</span>}
         </div>
       </div>
 
@@ -329,7 +331,7 @@ function IncidentDetail({ state, store, nav, route }) {
         </div>
 
         <div className="panel">
-          <div className="panel-head"><h2>Available Actions</h2><span className="corner">{resolved ? 'incident closed' : 'choose remediation'}</span></div>
+          <div className="panel-head"><h2>Available Actions</h2><span className="corner">{closed ? 'incident closed' : 'choose remediation'}</span></div>
           <div>
             {catalog.map((aid) => {
               const a = store.ACTIONS[aid];
@@ -341,7 +343,7 @@ function IncidentDetail({ state, store, nav, route }) {
                     <div className="at">{a.name}{rec && <span className="pts-pill">★ recommended</span>}</div>
                     <div className="ad">{a.desc}</div>
                   </div>
-                  <button className={'btn' + (rec && !resolved ? ' primary' : '')} disabled={resolved} onClick={() => apply(aid)}>Apply</button>
+                  <button className={'btn' + (rec && !closed ? ' primary' : '')} disabled={closed} onClick={() => apply(aid)}>Apply</button>
                 </div>
               );
             })}

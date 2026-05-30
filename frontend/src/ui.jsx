@@ -55,7 +55,7 @@ function SevTag({ sev }) {
   return <span className={'tag ' + (SEV_KIND[sev] || 'muted')}>{sev}</span>;
 }
 function StatusTag({ status }) {
-  const map = { open: 'crit', investigating: 'warn', resolved: 'good' };
+  const map = { open: 'crit', investigating: 'warn', resolved: 'good', failed: 'crit' };
   return <span className={'tag ' + (map[status] || 'muted')}>{status}</span>;
 }
 
