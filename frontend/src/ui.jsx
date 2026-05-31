@@ -98,7 +98,7 @@ function Topology({ cells, height = 360 }) {
   const E = [
     ['ru1', 'odu', 'Open FH', false], ['ru2', 'odu', '', false],
     ['odu', 'ocu', 'F1', false],
-    ['ocu', 'amf', 'N2', false], ['ocu', 'upf', 'N3', false],
+    ['ocu', 'amf', 'N2', true], ['ocu', 'upf', 'N3', false],
     ['nrt', 'ocu', 'E2', true], ['nrt', 'odu', '', true],
     ['nonrt', 'nrt', 'A1', true],
     ['smo', 'nonrt', '', true],
@@ -113,7 +113,7 @@ function Topology({ cells, height = 360 }) {
     odu: ['O-DU', 'O-RAN Distributed Unit — lower-layer baseband (RLC/MAC). Connects the O-RUs over the Open Fronthaul interface.'],
     ru1: ['O-RU', 'O-RAN Radio Unit — the radio/antenna front end (RF + Low-PHY). Your network cells live here; its status reflects their health.'],
     ru2: ['O-RU', 'O-RAN Radio Unit — the radio/antenna front end (RF + Low-PHY). Your network cells live here; its status reflects their health.'],
-    amf: ['AMF', '5G Core control plane — Access & Mobility Management Function (registration, mobility, session setup).'],
+    amf: ['AMF', '5G Core control plane — Access & Mobility Management Function (UE registration, connection and mobility management).'],
     upf: ['UPF', '5G Core user plane — User Plane Function that carries subscriber data traffic.'],
   };
   return (
