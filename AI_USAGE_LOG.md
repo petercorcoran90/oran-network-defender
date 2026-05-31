@@ -33,6 +33,17 @@ All AI-assisted changes must be logged here before merging. See CLAUDE.md for po
 | 2026-05-29 | Team + Claude | Cell heal/degrade on resolve | `IncidentService.applyOutcome` heals the cell on a correct fix, degrades it on a trap | Verified GOOD/CRITICAL transitions | — |
 | 2026-05-29 | Team + Claude | Difficulty ramp + cascade + match timer _(pending review)_ | Simulator difficulty curve; backend cascade (a trap spawns incidents on neighbours); frontend countdown timer | Verified cascade spawns neighbour incidents; **human review pending** | Cascade can snowball on repeated mistakes (by design) |
 | 2026-05-29 | Team + Claude | Cheat sheet + end-of-game screen | `GAMEPLAY_CHEATSHEET.md`; `GameOver.jsx` winner/summary screen | Verified scoring math (+140/−95/−10) and ENDED transition | — |
+| 2026-05-30 | Team + Claude | 3D map + scatter + difficulty | Integrated the Three.js network map; deterministic per-session tower scatter; EASY/MEDIUM/HARD → 3/6/9 towers | Builds; verified tower counts per difficulty | `three` dep added |
+| 2026-05-30 | Team + Claude | Join-by-code + minutes slider | `GET /api/sessions/code/{code}`; lobby code-entry; themed minutes slider | Verified join-by-code (case-insensitive, 404 on bad code) | — |
+| 2026-05-30 | Team + Claude | Action-matrix verification | Drove all 72 incident×action combos through the backend | 0 mismatches (result/status/points) — no code change | — |
+| 2026-05-30 | Team + Claude | Difficulty/incident-rate tuning | Live open-incident query, target scales with towers+time, stacking per cell, severity pool by difficulty | Diagnosed starvation as an idle-opponent artifact via DB logs | A per-player refill experiment was rolled back at the team's request |
+| 2026-05-30 | Team + Claude | Bug fixes | Failed incident showed "resolved"; new game opened on last screen; signal-quality coloured red when high; cascade/forfeit/heal | Verified each fix | — |
+| 2026-05-30 | Team + Claude | Ragequit forfeit + high-score table _(pending review)_ | `MatchResult` recorded on end; `GET /api/highscores`; lobby "Top scorers"; leaver forfeits (0–0 excluded) | Verified forfeit loss + table contents; **human review pending** | — |
+| 2026-05-30 | Team + Claude | Remove dead UI controls | Cut Tweaks difficulty/sim-speed, Settings toggles, Acknowledge, Filters, Penalty/Health/online columns | Builds; layout preserved | — |
+| 2026-05-30 | Team + Claude | configuration-status metric | `NetworkCell.configStatus` (STABLE/CHANGED/DRIFT) across entity/DTO/simulator/UI | Verified config faults map to CHANGED/DRIFT | — |
+| 2026-05-31 | Team + Claude | O-RAN topology accuracy + interactivity | Reworked topology to a correct O-RAN stack with labelled interfaces; clickable component descriptions | Verified against O-RAN SC docs + Wikipedia (see ARCHITECTURE.md sources) | — |
+| 2026-05-31 | Team + Claude | Simulator heal-clobber fix | Incident-free cells reset to healthy; drift kept in healthy band; incident created before metrics on spawn | Verified: every red cell has an incident; 0 stuck red-without-incident over a match | — |
+| 2026-05-31 | Team + Claude | Docs + deploy fixes _(pending review)_ | SECURITY.md; ARCHITECTURE.md refresh; nginx `/api` proxy; K8s simulator Deployment + ingest-token wiring | Config changes; **not yet verified with a live `docker compose up` / `kubectl apply`** | — |
 
 ## Notes / known gaps to revisit
 
@@ -42,7 +53,9 @@ All AI-assisted changes must be logged here before merging. See CLAUDE.md for po
 - **Simulator is the sole generator** — a match has no cells/incidents until the Python
   simulator (its own container) picks it up; if the simulator is down, matches stay empty.
 - **Cascade can snowball** — repeated wrong actions keep spawning neighbour incidents
-  (bounded by `MAX_INCIDENT_CELLS` + per-cell de-dupe); tune if playtests feel too harsh.
+  (bounded by the per-tick refill + `PER_CELL_MAX` stacking limit); tune if playtests feel harsh.
+- **Solo testing looks starved** — incident spawning is gated by the busier player's open
+  count, so an idle second window makes the active player wait. Two real players don't starve.
 - **Build with JDK 21**, not the default JDK 26 — Lombok cannot process 26.
 - **Tests still to be written by the team** — AI did not write tests. The engine, `submitAction`
   (+ heal/cascade), and the `api.js` signature bug are all things unit/integration/frontend

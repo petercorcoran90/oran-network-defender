@@ -17,6 +17,10 @@ spec:
           image: oran-network-defender-frontend:latest
           ports:
             - containerPort: 80
+          env:
+            # nginx proxies /api to this in-cluster backend Service (see nginx.conf)
+            - name: BACKEND_HOST
+              value: "backend-service"
           resources:
             requests:
               cpu: "50m"
