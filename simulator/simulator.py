@@ -144,11 +144,15 @@ def derive_health(m):
 
 
 def drift(metrics, rng):
-    metrics["userLoad"] = clamp(metrics["userLoad"] + rng.uniform(-5, 5), 0, 100)
-    metrics["latency"] = clamp(metrics["latency"] + rng.uniform(-6, 6), 5, 300)
-    metrics["signalQuality"] = clamp(metrics["signalQuality"] + rng.uniform(-3, 3), 0, 100)
-    metrics["energyUsage"] = clamp(metrics["energyUsage"] + rng.uniform(-2, 2), 0, 100)
-    metrics["healthStatus"] = derive_health(metrics)
+    # Gentle wiggle for a HEALTHY (incident-free) cell. Stays within healthy bounds so a cell
+    # with no incident never drifts into amber/red — degradation only ever comes from incidents.
+    metrics["userLoad"] = clamp(metrics["userLoad"] + rng.uniform(-5, 5), 10, 55)
+    metrics["latency"] = clamp(metrics["latency"] + rng.uniform(-5, 5), 10, 60)
+    metrics["signalQuality"] = clamp(metrics["signalQuality"] + rng.uniform(-3, 3), 82, 100)
+    metrics["packetLoss"] = clamp(metrics.get("packetLoss", 1.0) + rng.uniform(-1, 1), 0, 5)
+    metrics["energyUsage"] = clamp(metrics["energyUsage"] + rng.uniform(-2, 2), 30, 70)
+    metrics["healthStatus"] = "GOOD"
+    metrics["configStatus"] = "STABLE"
 
 
 def cell_spec(name, m):
@@ -251,7 +255,14 @@ def tick_session(session):
         for name in state["cells"]:
             if merged[name] > 0:
                 continue  # keep incident evidence stable while a cell has an open incident
-            drift(state["cells"][name], rng)
+            m = state["cells"][name]
+            if m["healthStatus"] != "GOOD" or m.get("configStatus", "STABLE") != "STABLE":
+                # The incident on this cell has been cleared, so the cell is healthy again.
+                # Reset to healthy instead of drifting stale symptom values back over the
+                # backend's heal (a cell with no open incident should never sit red).
+                state["cells"][name] = healthy_metrics()
+            else:
+                drift(m, rng)
             push_metrics(sid, state, name)
 
     # Difficulty + time ramp: keep the board topped up to a target that grows with tower
@@ -270,11 +281,13 @@ def tick_session(session):
         name = rng.choice([n for n in candidates if merged[n] == fewest])
         rc = rng.choice(pool)
         apply_symptom(state["cells"][name], rc)
-        push_metrics(sid, state, name)
+        # Create the incident BEFORE pushing the degraded metrics, so a reader never sees a
+        # red cell with no incident on it (the evidence catches up a beat later, not before).
         for pid, name_to_id in state["players"].items():
             post("/api/internal/sessions/%d/incidents" % sid,
                  {"playerId": pid, "cellId": name_to_id[name], "incidentType": ARCHETYPES[rc]["type"],
                   "severity": ARCHETYPES[rc]["severity"], "rootCause": rc, "description": DESCRIPTIONS[rc]})
+        push_metrics(sid, state, name)
         merged[name] += 1
         spawned += 1
     if spawned:
