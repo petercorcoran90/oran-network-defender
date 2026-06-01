@@ -36,7 +36,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "simSpeed": 1
 }/*EDITMODE-END*/;
 
-function openTweaks() { window.postMessage({ type: '__activate_edit_mode' }, '*'); }
+// Same-window message; target the current origin (never '*') so it can't leak to another origin.
+function openTweaks() { window.postMessage({ type: '__activate_edit_mode' }, window.location.origin); }
 
 function App() {
   const [conn, setConn] = useState(null); // real backend session: { user, session, playerId }
@@ -79,7 +80,6 @@ function App() {
   const Screen = SCREENS[route.screen] || Dashboard;
   const activeNav = route.screen === 'incident' ? 'incidents' : route.screen;
   const activeCount = GameSelectors.activeIncidents(state).length;
-  const me = state.players.find((p) => p.you);
 
   return (
     <div className="app">

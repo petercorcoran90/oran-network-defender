@@ -247,7 +247,6 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
 
     // ---- signal pings travelling along links ----
     const pings = [];
-    const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3();
     let spawnAcc = 0;
     function statusWorse(a, b) {
       const order = { good: 0, warn: 1, crit: 2, down: 1 };

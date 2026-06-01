@@ -83,7 +83,9 @@ Do them in this order; each is a self-contained commit so regressions are easy t
   - _Done:_ `api.test.js` (URL/body incl. playerId regression, ApiError, 204 → **api.js 100%**), `store.test.js` (statusOf/Selectors + backend→UI mapping incl. root-cause-hidden + applyAction → **store.js 98%**), `screens.test.jsx` (Incidents/Scoreboard display + IncidentDetail action submission). **18 tests.** LCOV emitted for Sonar. (Playwright E2E dropped — the backend `SystemFlowTest` already covers the full flow.)
 - [x] **Step 6** — **Python tests** (pytest for the simulator). Commit → Sonar.
   - _Done:_ `simulator/test_simulator.py` (12): archetypes match the backend RootCause enum + valid severity/health/config, `severity_pool` ramp, `build_plan` repeatable + valid incidents, `drift` repeatable & keeps incident-free cells GOOD, `derive_health` thresholds, `elapsed_fraction` bounds/safety. `coverage.xml` for Sonar.
-- [ ] **Step 7** — Review the **quality gate**, fix/justify findings, document coverage delta.
+- [x] **Step 7** — Review the **quality gate**, fix/justify findings, document coverage delta.
+  - _Done:_ first full multi-language scan — **Quality Gate passed**, Coverage **44.6%**, Duplications **0.0%**, Maintainability **A**. Fixed the one CRITICAL (`S2819` postMessage origin), the Dockerfile-root hotspot, and unused-var smells; reviewed 6 hotspots (5 pseudorandom → Safe w/ reasons); accepted (not suppressed) the ~141 prop-validation + a11y findings as plain-JS-React conventions. Full write-up in `SECURITY.md`.
+  - _Coverage rationale:_ 44.6% overall is dragged down by presentational React (`App`, `Lobby`, `GameOver`, `TweaksPanel`) and the WebGL map (`NetworkMap3D`, excluded). The **logic** is strongly covered: engine **100%** (line+branch), `api.js` **100%**, `store.js` **98%**, services/controllers via the integration + slice tests.
 
 > **Coverage feeds are per-language, not merged into JaCoCo.** JaCoCo = Java only
 > (`backend/target/site/jacoco/jacoco.xml`); frontend = LCOV (`frontend/coverage/lcov.info`);

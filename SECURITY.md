@@ -41,3 +41,29 @@ Auth is intentionally lightweight (per the brief), but the model is made explici
 - [x] Hidden root cause never sent to clients
 - [x] Errors don't leak stack traces
 - [ ] Real authentication (lightweight only today — documented gap)
+
+## SonarQube review (Step 7 — what was found / fixed / accepted)
+
+First full multi-language scan: **Quality Gate passed**; Coverage 44.6%, Duplications 0.0%,
+Maintainability **A**. Issues triaged honestly (fixed real problems; accepted style findings
+with reasons) — we did **not** disable rules or suppress issues to move ratings.
+
+**Fixed (genuine):**
+- **`S2819` (CRITICAL, `App.jsx`)** — `window.postMessage(..., '*')` used a wildcard target
+  origin. Changed to `window.location.origin` (same-window listener), clearing the only
+  critical issue → Security rating back to A.
+- **Simulator Dockerfile ran as root** — added a non-root `USER` (the simulator only makes
+  outbound calls).
+- **Unused vars / dead stores** (`S1481`/`S1854`) in `App.jsx`, `NetworkMap3D.jsx` — removed.
+
+**Security hotspots (6) — reviewed:**
+- 5× "pseudorandom generator" (`simulator.py` match seeding, `NetworkMap3D.jsx` 3D visuals)
+  marked **Safe** with justifications: randomness is for gameplay determinism / visuals, never
+  for secrets, tokens or auth.
+- 1× Dockerfile-root — addressed by the non-root `USER` above.
+
+**Accepted (not defects — documented, not suppressed):**
+- ~141× `S6774` "validate props" and ~30 a11y/style rules across the React UI. The frontend is
+  **plain JS without PropTypes/TypeScript**; these are convention findings, not reliability or
+  security defects. Maintainability is already rated **A**, so no rule was disabled — the issues
+  remain visible on the dashboard with this written rationale.
