@@ -27,6 +27,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -35,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
  * This is the integration tier — the engine itself is unit-tested separately. {@code @Transactional}
  * rolls each test back for isolation.
  */
+@SpringBootTest
 @Transactional
 @DisplayName("submitAction (MySQL Testcontainer)")
 class SubmitActionIntegrationTest extends AbstractMySqlIntegrationTest {

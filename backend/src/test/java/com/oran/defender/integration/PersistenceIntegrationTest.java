@@ -20,6 +20,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
  * repository queries work against real MySQL — the kind of thing an in-memory DB can mask.
  * {@code @Transactional} rolls each test back so they stay independent.
  */
+@SpringBootTest
 @Transactional
 @DisplayName("Persistence layer (MySQL Testcontainer)")
 class PersistenceIntegrationTest extends AbstractMySqlIntegrationTest {
