@@ -44,6 +44,9 @@ All AI-assisted changes must be logged here before merging. See CLAUDE.md for po
 | 2026-05-31 | Team + Claude | O-RAN topology accuracy + interactivity | Reworked topology to a correct O-RAN stack with labelled interfaces; clickable component descriptions | Verified against O-RAN SC docs + Wikipedia (see ARCHITECTURE.md sources) | — |
 | 2026-05-31 | Team + Claude | Simulator heal-clobber fix | Incident-free cells reset to healthy; drift kept in healthy band; incident created before metrics on spawn | Verified: every red cell has an incident; 0 stuck red-without-incident over a match | — |
 | 2026-05-31 | Team + Claude | Docs + deploy fixes _(pending review)_ | SECURITY.md; ARCHITECTURE.md refresh; nginx `/api` proxy; K8s simulator Deployment + ingest-token wiring | Config changes; **not yet verified with a live `docker compose up` / `kubectl apply`** | — |
+| 2026-06-01 | Team + Claude | Testing strategy doc | `TESTING_STRATEGY.md`: pyramid mapped to the brief, Testcontainers(MySQL) for integration/system, per-layer commit order with a Sonar run each step | Doc only; team agreed the plan | — |
+| 2026-06-01 | Team + Claude | Phase 0: quality plumbing | `quality/docker-compose.sonar.yml` (SonarQube Community + Postgres) + README; JaCoCo in `pom.xml`; root `sonar-project.properties`; `.github/workflows/ci.yml` | `mvn verify` emits `jacoco.xml`; **all 3 CI jobs green** on the push | Local Sonar scan (runner can't reach localhost Sonar) — documented |
+| 2026-06-01 | Team + Claude | Step 1: engine unit tests _(pending review)_ | `IncidentEvaluatorTest` (hand-written correct/trap expectations + full 72-combo sweep + contextual-IGNORE rule) and `ScoreCalculatorTest` (literal golden scores + time-bonus boundaries) | 121 tests pass on JDK 21; **100% line+branch on the engine package**; **human review pending** before counting as done | AI drafted; team must confirm the assertions are meaningful per the AI policy |
 
 ## Notes / known gaps to revisit
 
@@ -57,6 +60,8 @@ All AI-assisted changes must be logged here before merging. See CLAUDE.md for po
 - **Solo testing looks starved** — incident spawning is gated by the busier player's open
   count, so an idle second window makes the active player wait. Two real players don't starve.
 - **Build with JDK 21**, not the default JDK 26 — Lombok cannot process 26.
-- **Tests still to be written by the team** — AI did not write tests. The engine, `submitAction`
-  (+ heal/cascade), and the `api.js` signature bug are all things unit/integration/frontend
-  tests should now cover.
+- **Testing underway (see `TESTING_STRATEGY.md`)** — Step 1 (engine unit tests) is in on the
+  `test-containers` branch, AI-drafted and pending human review. Still to come: controller/API
+  + negative tests, Testcontainers integration (`submitAction` + heal/cascade), the full-flow
+  system test, frontend (Vitest/RTL), and the Python simulator (pytest). Per policy, AI may
+  draft tests but the team must review that they assert meaningful behaviour before relying on them.
