@@ -11,6 +11,13 @@ frontend/node_modules/
 frontend/dist/
 frontend/coverage/
 
+# Python / simulator
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+simulator/coverage.xml
+
 # IDE — IntelliJ
 .idea/
 *.iml

@@ -81,7 +81,8 @@ Do them in this order; each is a self-contained commit so regressions are easy t
   - _Done:_ `SystemFlowTest` (`@SpringBootTest` RANDOM_PORT + `TestRestTemplate`): create→join×2→ready→ACTIVE→ingest cell+incident→correct action→score & incident RESOLVED, + root-cause-not-leaked check. **Backend total: 145 tests.**
 - [x] **Step 5** — **Frontend tests** (Vitest/RTL). Commit → Sonar.
   - _Done:_ `api.test.js` (URL/body incl. playerId regression, ApiError, 204 → **api.js 100%**), `store.test.js` (statusOf/Selectors + backend→UI mapping incl. root-cause-hidden + applyAction → **store.js 98%**), `screens.test.jsx` (Incidents/Scoreboard display + IncidentDetail action submission). **18 tests.** LCOV emitted for Sonar. (Playwright E2E dropped — the backend `SystemFlowTest` already covers the full flow.)
-- [ ] **Step 6** — **Python tests** (pytest for the simulator). Commit → Sonar.
+- [x] **Step 6** — **Python tests** (pytest for the simulator). Commit → Sonar.
+  - _Done:_ `simulator/test_simulator.py` (12): archetypes match the backend RootCause enum + valid severity/health/config, `severity_pool` ramp, `build_plan` repeatable + valid incidents, `drift` repeatable & keeps incident-free cells GOOD, `derive_health` thresholds, `elapsed_fraction` bounds/safety. `coverage.xml` for Sonar.
 - [ ] **Step 7** — Review the **quality gate**, fix/justify findings, document coverage delta.
 
 > **Coverage feeds are per-language, not merged into JaCoCo.** JaCoCo = Java only
