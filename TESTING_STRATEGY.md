@@ -66,16 +66,28 @@ breakage is easy to isolate and Sonar produces a fresh report at every step.
 
 ## Incremental rollout — one commit (and one Sonar run) per step
 
-Do them in this order; each is a self-contained commit so regressions are easy to bisect:
+Do them in this order; each is a self-contained commit so regressions are easy to bisect.
+(Per-step results are noted inline as they land; full detail + reviewers live in `AI_USAGE_LOG.md`.)
 
-- [ ] **Step 0** — Phase 0 plumbing (Sonar+Postgres compose, JaCoCo, `sonar-project.properties`, GitHub Actions skeleton). Commit. First Sonar baseline.
-- [ ] **Step 1** — **Backend unit tests**: engine (72-combo matrix + scoring). Commit → Sonar.
-- [ ] **Step 2** — **Controller/API + negative tests** (`@WebMvcTest`). Commit → Sonar.
-- [ ] **Step 3** — **Integration tests** (Testcontainers MySQL): repositories + `submitAction`/heal/cascade. Commit → Sonar.
-- [ ] **Step 4** — **System/E2E** full-flow test (the brief's required one). Commit → Sonar.
-- [ ] **Step 5** — **Frontend tests** (Vitest/RTL, + one Playwright E2E). Commit → Sonar.
+- [x] **Step 0** — Phase 0 plumbing (Sonar+Postgres compose, JaCoCo, `sonar-project.properties`, GitHub Actions skeleton). Commit. First Sonar baseline.
+  - _Done:_ `quality/docker-compose.sonar.yml` + README, JaCoCo in `pom.xml`, root `sonar-project.properties`, `.github/workflows/ci.yml` (3 jobs). `mvn verify` emits `jacoco.xml`; CI green.
+- [x] **Step 1** — **Backend unit tests**: engine (72-combo matrix + scoring). Commit → Sonar.
+  - _Done:_ `IncidentEvaluatorTest` (hand-written correct/trap + full 72 sweep + contextual-IGNORE) + `ScoreCalculatorTest` (golden scores + time-bonus boundaries). **120 tests, 100% line+branch on the engine package.**
+- [x] **Step 2** — **Controller/API + negative tests** (`@WebMvcTest`). Commit → Sonar.
+  - _Done:_ `SessionControllerTest` (8), `IncidentControllerTest` (6), `UserControllerTest` (4). Validation 400s, exception→status (404/409/400), leak-free error body. **18 tests.**
+- [x] **Step 3** — **Integration tests** (Testcontainers MySQL): repositories + `submitAction`/heal/cascade. Commit → Sonar.
+  - _Done:_ retired H2; `AbstractMySqlIntegrationTest` (one shared container), `PersistenceIntegrationTest` (2), `SubmitActionIntegrationTest` (4: correct→heal/score, trap→fail/cascade, ineffective→open, cross-player rejected). Local fix: pinned docker-java API to 1.41 (Surefire) for daemons that reject API<1.40.
+- [x] **Step 4** — **System/E2E** full-flow test (the brief's required one). Commit → Sonar.
+  - _Done:_ `SystemFlowTest` (`@SpringBootTest` RANDOM_PORT + `TestRestTemplate`): create→join×2→ready→ACTIVE→ingest cell+incident→correct action→score & incident RESOLVED, + root-cause-not-leaked check. **Backend total: 145 tests.**
+- [x] **Step 5** — **Frontend tests** (Vitest/RTL). Commit → Sonar.
+  - _Done:_ `api.test.js` (URL/body incl. playerId regression, ApiError, 204 → **api.js 100%**), `store.test.js` (statusOf/Selectors + backend→UI mapping incl. root-cause-hidden + applyAction → **store.js 98%**), `screens.test.jsx` (Incidents/Scoreboard display + IncidentDetail action submission). **18 tests.** LCOV emitted for Sonar. (Playwright E2E dropped — the backend `SystemFlowTest` already covers the full flow.)
 - [ ] **Step 6** — **Python tests** (pytest for the simulator). Commit → Sonar.
 - [ ] **Step 7** — Review the **quality gate**, fix/justify findings, document coverage delta.
+
+> **Coverage feeds are per-language, not merged into JaCoCo.** JaCoCo = Java only
+> (`backend/target/site/jacoco/jacoco.xml`); frontend = LCOV (`frontend/coverage/lcov.info`);
+> Python = `simulator/coverage.xml`. Sonar ingests all three separately and aggregates them into
+> the project-level Coverage %.
 
 ---
 
