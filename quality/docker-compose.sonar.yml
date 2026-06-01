@@ -1,0 +1,47 @@
+# Local SonarQube Community + its own PostgreSQL backing store.
+# This is SEPARATE from the application's MySQL — Postgres here is only Sonar's database.
+#
+#   docker compose -f quality/docker-compose.sonar.yml up -d
+#   open http://localhost:9000   (first login admin/admin, then change password + make a token)
+#   docker compose -f quality/docker-compose.sonar.yml down      # stop (keeps volumes)
+#
+# Note: SonarQube's embedded Elasticsearch needs vm.max_map_count >= 262144 on the Docker host.
+# Docker Desktop (macOS/Windows) sets this for you. On Linux: sudo sysctl -w vm.max_map_count=262144
+services:
+  sonar-db:
+    image: postgres:16-alpine
+    container_name: sonar-db
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonar
+      POSTGRES_DB: sonar
+    volumes:
+      - sonar_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    depends_on:
+      sonar-db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonar_data:/opt/sonarqube/data
+      - sonar_extensions:/opt/sonarqube/extensions
+      - sonar_logs:/opt/sonarqube/logs
+
+volumes:
+  sonar_db:
+  sonar_data:
+  sonar_extensions:
+  sonar_logs:
