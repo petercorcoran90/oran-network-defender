@@ -1,34 +1,43 @@
 # O-RAN Network Defender — Game Logic Reference
 
-## Game Modes
+## Game Mode — 2-Player Head-to-Head (MVP)
 
-Choose **one** for MVP. Hybrid is the most complex — start with Co-op or Competitive.
+The MVP is a **1-versus-1 duel**. Two players join one session and play simultaneously.
 
-| Mode | Description | Scoring |
-|------|-------------|---------|
-| Co-operative | All players share one network; incidents affect everyone | Single shared team score |
-| Competitive | Each player/team owns a separate network region | Individual or team ranking |
-| Hybrid | Shared incidents, individual scoring | Per-player score + shared health indicator |
+- Each player gets their **own private copy** of the network (cells + incidents).
+- Both copies are **mirrored**: the same incidents, with the same type, severity and hidden
+  root cause, appear on both players' networks at the same time.
+- Players solve their own incidents independently — one player restarting a cell has **no
+  effect** on the other player's network.
+- The match runs for a fixed time, chosen by the session creator (`durationSeconds`).
+- When the timer expires the session moves to `ENDED`. **Highest score wins**; equal = draw.
+
+Because both players face identical problems, the only variable is decision quality — which
+makes the game provably fair and the scoring trivial to settle.
+
+> **Data model implication:** `network_cells` and `incidents` both carry a `player_id` FK
+> (in addition to `game_session_id`) so each player owns their mirrored copy. `game_sessions`
+> carries `duration_seconds`. See `ARCHITECTURE.md` for the full schema.
 
 ---
 
 ## Gameplay Loop (step by step)
 
 ```
-1. Player opens browser → enters name / credentials
-2. Player creates or joins a GameSession
-3. Backend assigns player to a network region (or shared network)
-4. Python Simulator begins generating metric changes for that session's cells
+1. Player A opens browser → enters name → creates a GameSession (picks durationSeconds)
+2. Player B joins the session via its session code
+3. When the 2nd player joins, the session starts: each player is given an identical,
+   private copy of the network (mirrored cells + incidents from the same seed)
+4. Python Simulator drifts each player's cell metrics over time
 5. Game API pushes live metric updates to connected players (SSE / WebSocket)
-6. At intervals, Game Engine triggers incident generation (via Simulator or internally)
-7. Incident appears in player's Incident List with evidence
-8. Player inspects incident evidence (cell metrics, alarms, neighbour changes)
-9. Player selects and submits a remediation action
-10. Game Engine evaluates action against root cause → applies outcome
-11. Cell state updates (better or worse depending on correctness)
-12. Score updates immediately; scoreboard refreshes
-13. When session timer expires (or health hits 0) → game ends
-14. End-of-game summary shown: performance breakdown, best/worst decisions
+6. Incidents appear in each player's Incident List with evidence (root cause hidden)
+7. Player inspects evidence (cell metrics, alarms, neighbour changes)
+8. Player selects and submits a remediation action
+9. Game Engine evaluates the action against the hidden root cause → verdict + points
+10. The player's own cell state and score update; opponent is unaffected
+11. Scoreboard refreshes for both players
+12. When the session timer expires → game ends
+13. End-of-game summary shown: per-player breakdown, best/worst decisions, winner
 ```
 
 ---
@@ -82,51 +91,120 @@ changes, alarm patterns) determines the correct choice.
 
 Actions available to players (backend enforces validity):
 
-| Action | Effect if correct | Effect if wrong | Effect if neutral |
-|--------|-----------------|----------------|------------------|
-| `REBALANCE_TRAFFIC` | Reduces load, improves health | Overloads neighbour, spreads fault | No change |
-| `RESTART_CELL` | Clears transient faults | Causes brief downtime, negative score | Wastes time |
-| `ROLLBACK_CONFIG` | Fixes config-change incidents | No effect on non-config incidents | No change |
-| `ROLLBACK_SOFTWARE` | Fixes upgrade faults | No effect otherwise | No change |
-| `INCREASE_TRANSMIT_POWER` | Fixes interference (sometimes) | Worsens interference | Marginal |
-| `FILTER_ALARMS` | Helps find root cause in alarm storm | Misses real alarm | No change |
-| `DISABLE_AUTOMATION` | Stops rogue automation | Removes good automation | Neutral |
-| `ESCALATE` | Correct for unresolvable faults | Wastes time if resolvable | Slight negative |
-| `IGNORE` | Sometimes correct (false alarm) | Misses real incident | Large negative |
+| Action | Cost | Effect if correct | Effect if wrong | Effect if neutral |
+|--------|------|-----------------|----------------|------------------|
+| `REBALANCE_TRAFFIC` | 10 | Reduces load, improves health | Overloads neighbour, spreads fault | No change |
+| `RESTART_CELL` | 20 | Clears transient faults | Causes brief downtime, negative score | Wastes time |
+| `ROLLBACK_CONFIG` | 10 | Fixes config-change incidents | No effect on non-config incidents | No change |
+| `ROLLBACK_SOFTWARE` | 15 | Fixes upgrade faults | No effect otherwise | No change |
+| `INCREASE_TRANSMIT_POWER` | 10 | Fixes interference (sometimes) | Worsens interference | Marginal |
+| `FILTER_ALARMS` | 5 | Helps find root cause in alarm storm | Misses real alarm | No change |
+| `DISABLE_AUTOMATION` | 10 | Stops rogue automation | Removes good automation | Neutral |
+| `ESCALATE` | 5 | Correct for unresolvable faults | Wastes time if resolvable | Slight negative |
+| `IGNORE` | 0 | Sometimes correct (false alarm) | Misses real incident | Large negative |
+
+`Cost` = `remediationCost` in `ActionType`, subtracted from the score on every use.
 
 ---
 
 ## Scoring System
 
-Score = sum of components, updated in real time.
+A player's `score` is the running sum of per-action deltas, each recorded as a `score_event`
+(append-only, so scores can't be silently edited). The delta is computed by the engine's
+`ScoreCalculator` and combines **three** of the brief's scoring factors:
 
-### Components (minimum required: 3)
+| Factor | How it enters the delta | Direction |
+|--------|-------------------------|-----------|
+| **Action correctness** | CORRECT earns base points; HARMFUL loses a penalty | Correct = better |
+| **Response time** | A bonus that decays the longer the player takes | Faster = better |
+| **Remediation cost** | Every action subtracts its own cost | Cheaper fix = better |
 
-| Component | Description | Direction |
-|-----------|-------------|-----------|
-| **Network health** | Average cell health score across player's region | Higher = better |
-| **Response time** | Time from incident creation to action submission | Faster = better |
-| **Action correctness** | CORRECT → positive delta; INCORRECT → negative delta | Correct = better |
-| **Customer impact** | Penalise cells with SLA-level degradation (optional) | Lower = better |
-| **Remediation cost** | Some actions cost more than others | Lower = better |
-
-### Score Delta per Action
+### Score Delta per Action (as implemented)
 
 ```
-CORRECT action:
-  +basePoints (e.g. 100)
-  + responseTimeBonus (e.g. max 50, decays linearly over 60 seconds)
-  - remediationCost (action-specific constant)
-
-INCORRECT action:
-  -penalty (e.g. 75)
-  - remediationCost
-
-NEUTRAL action:
-  - remediationCost only (or 0 if free action)
+CORRECT      →  +100  + timeBonus(responseSeconds)  − action.remediationCost
+HARMFUL      →  −75   − action.remediationCost
+INEFFECTIVE  →        − action.remediationCost
 ```
 
-Health component updates continuously from the Simulator's metric stream, not just on actions.
+- `timeBonus` = up to **50**, decaying linearly to **0** over **60 seconds**
+  (0s → 50, 30s → 25, ≥60s → 0).
+- `remediationCost` is per-action (see Player Actions table). e.g. `RESTART_CELL` = 20
+  (causes downtime), `IGNORE` = 0.
+
+Constants live in `ScoreCalculator` (`BASE_POINTS`, `MAX_TIME_BONUS`, `BONUS_DECAY_SECONDS`,
+`HARMFUL_PENALTY`) — change them there to rebalance.
+
+> Network health is still shown live from the Simulator's metric stream, but the **competitive
+> score** that decides the duel comes from these per-action deltas.
+
+---
+
+## Game Engine
+
+The engine (`com.oran.defender.engine`) is the **pure core** of the game: no Spring context,
+no database, no HTTP, no dependency on the Python simulator. It answers one question —
+*given an incident's hidden root cause and the action a player chose, was it right, and what's
+it worth?* Being deterministic, it judges both duelling players by identical rules and can be
+unit-tested exhaustively.
+
+### Pieces
+
+| Type | Responsibility |
+|------|----------------|
+| `ActionType` | The 9 actions (names match the seeded `actions` table); each carries a `remediationCost`. |
+| `RootCause` | The real underlying problem (server-side only). Each declares its **correct action** and its **trap actions**. |
+| `EvaluationResult` | The verdict: `CORRECT`, `INEFFECTIVE`, or `HARMFUL`. |
+| `IncidentEvaluator` | `evaluate(rootCause, action) → EvaluationResult`. |
+| `ScoreCalculator` | `pointsFor(result, responseSeconds, action) → int` (the deltas above). |
+
+### Evaluation rules
+
+```
+action == rootCause.correctAction()  → CORRECT
+action ∈ rootCause.trapActions        → HARMFUL
+otherwise                             → INEFFECTIVE
+```
+
+### Root-cause → action map
+
+| Root cause | Correct action | Trap actions |
+|------------|----------------|--------------|
+| `CELL_OVERLOAD` | `REBALANCE_TRAFFIC` | `RESTART_CELL`, `IGNORE` |
+| `NEIGHBOUR_CONFIG_CHANGE` | `ROLLBACK_CONFIG` | `RESTART_CELL`, `IGNORE` |
+| `TRANSPORT_LINK_FAULT` | `ESCALATE` | `RESTART_CELL`, `IGNORE` |
+| `ALARM_STORM` | `FILTER_ALARMS` | `RESTART_CELL`, `IGNORE` |
+| `NEIGHBOUR_INTERFERENCE` | `INCREASE_TRANSMIT_POWER` | `RESTART_CELL`, `IGNORE` |
+| `SOFTWARE_UPGRADE_FAULT` | `ROLLBACK_SOFTWARE` | `INCREASE_TRANSMIT_POWER`, `IGNORE` |
+| `ROGUE_AUTOMATION` | `DISABLE_AUTOMATION` | `REBALANCE_TRAFFIC`, `IGNORE` |
+| `FALSE_ALARM` | `IGNORE` | `RESTART_CELL` |
+
+### Why it keys on root cause, not incident type
+
+The brief's headline rule is *"the same action must not always be correct."* The engine
+decides correctness from the **hidden root cause**, so the same action can be right or wrong
+depending on context. Clearest example — `IGNORE`:
+
+- `FALSE_ALARM` → `IGNORE` is **correct** (`CORRECT`, +points)
+- any real incident → `IGNORE` is a **trap** (`HARMFUL`, −points)
+
+This is also why `root_cause` is never sent to the client (`IncidentResponse` omits it) — it's
+the answer key.
+
+### Engine ↔ persistence mapping
+
+The engine's verdict maps onto the persisted `PlayerAction.ActionResult` / incident status in
+the service layer:
+
+```
+CORRECT     → ActionResult.SUCCESS , incident → RESOLVED
+INEFFECTIVE → ActionResult.PARTIAL , incident stays OPEN
+HARMFUL     → ActionResult.FAILED  , incident → FAILED
+```
+
+The service is thin glue: translate the stored strings to engine enums
+(`RootCause.valueOf`, `ActionType.valueOf`), call `evaluate` then `pointsFor`, then persist
+the `PlayerAction` + `ScoreEvent` and bump the player's score.
 
 ---
 
@@ -159,11 +237,11 @@ Game Engine to evaluate actions.
 ## Session Lifecycle
 
 ```
-WAITING   → players join, minimum 2 players recommended
-    ↓        start triggered manually or auto on player count
-ACTIVE    → metrics changing, incidents firing, actions accepted
-    ↓        timer expires OR network health reaches 0
-ENDED     → no more actions accepted, summary available
+WAITING   → created by player 1; waiting for player 2 to join (max 2 players)
+    ↓        auto-starts when the 2nd player joins; each player seeded an identical network
+ACTIVE    → metrics changing, incidents firing, actions accepted (timer running)
+    ↓        timer expires (started_at + duration_seconds elapsed)
+ENDED     → no more actions accepted; scores compared; higher score wins (equal = draw)
 ```
 
 ---

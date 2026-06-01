@@ -1,0 +1,77 @@
+name: CI
+
+# Build + test + coverage on every push / PR.
+# Tests are added layer-by-layer (see TESTING_STRATEGY.md); the jobs below already exist so
+# each new layer just starts running here. The "no tests yet" tolerance is removed once a
+# layer lands real tests.
+#
+# SonarQube analysis is run LOCALLY against the self-hosted Community server (not in CI) —
+# a localhost SonarQube isn't reachable from GitHub-hosted runners. See quality/README.md.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (Java) — build, test, coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # Runner has Docker available, so Testcontainers-based tests will work once they land.
+      - name: Build & test (JaCoCo coverage)
+        run: mvn -B -ntp verify
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jacoco-report
+          path: backend/target/site/jacoco/
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend (React) — build, test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # --passWithNoTests keeps CI green until the frontend test layer (Step 5) lands.
+      - name: Test
+        run: npm test -- --passWithNoTests
+
+  simulator:
+    name: Simulator (Python) — test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: simulator
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install pytest pytest-cov
+      # Exit code 5 = "no tests collected"; tolerated until the Python layer (Step 6) lands.
+      - name: Test
+        run: |
+          pytest --cov=. --cov-report=xml || rc=$?; \
+          if [ -n "$rc" ] && [ "$rc" -ne 5 ]; then exit "$rc"; fi

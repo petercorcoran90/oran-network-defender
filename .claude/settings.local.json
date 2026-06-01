@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(brew install *)",
+      "Bash(pdftoppm --version)",
+      "Bash(pdftotext \"/Users/petercorcoran/Tools&Tech/O-RAN/01_oran_network_defender.pdf\" -)"
+    ]
+  }
+}

@@ -1,0 +1,85 @@
+/* ============================================================
+   api.js — thin REST client for the O-RAN backend.
+   All calls go through the Vite dev proxy (/api -> http://localhost:8080,
+   see vite.config.js); in production nginx serves the same /api path.
+   Methods mirror the Spring controllers 1:1.
+   ============================================================ */
+
+const BASE = '/api';
+
+/** Error carrying the HTTP status and the backend's { status, error, message } body. */
+export class ApiError extends Error {
+  constructor(status, message, body) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.body = body;
+  }
+}
+
+async function request(path, { method = 'GET', body } = {}) {
+  const res = await fetch(BASE + path, {
+    method,
+    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    let detail = null;
+    try { detail = await res.json(); } catch { /* non-JSON error body */ }
+    throw new ApiError(res.status, detail?.message || res.statusText, detail);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+export const Api = {
+  // --- action catalog ---
+  getActions: () => request('/actions'),
+
+  // --- high scores ---
+  getHighScores: () => request('/highscores'),
+
+  // --- users ---
+  createUser: (username, role = 'PLAYER') =>
+    request('/users', { method: 'POST', body: { username, role } }),
+  login: (username) => request('/users/login', { method: 'POST', body: { username } }),
+  getUser: (id) => request(`/users/${id}`),
+
+  // --- sessions ---
+  createSession: (name, createdByUserId, durationSeconds, difficulty) =>
+    request('/sessions', { method: 'POST', body: { name, createdByUserId, durationSeconds, difficulty } }),
+  listSessions: () => request('/sessions'),
+  getSession: (id) => request(`/sessions/${id}`),
+  getSessionByCode: (code) => request(`/sessions/code/${encodeURIComponent(code)}`),
+  joinSession: (id, userId, teamName) =>
+    request(`/sessions/${id}/join`, { method: 'POST', body: { userId, teamName } }),
+  startSession: (id) => request(`/sessions/${id}/start`, { method: 'POST' }),
+  ready: (id, playerId) => request(`/sessions/${id}/ready`, { method: 'POST', body: { playerId } }),
+  leaveSession: (id, playerId) => request(`/sessions/${id}/leave`, { method: 'POST', body: { playerId } }),
+  getPlayers: (id) => request(`/sessions/${id}/players`),
+
+  // --- network cells ---
+  getCells: (sessionId, playerId) =>
+    request(`/sessions/${sessionId}/cells${playerId != null ? `?playerId=${playerId}` : ''}`),
+  getCell: (sessionId, cellId) => request(`/sessions/${sessionId}/cells/${cellId}`),
+
+  // --- incidents ---
+  getIncidents: (sessionId, playerId, status) => {
+    const q = new URLSearchParams();
+    if (playerId != null) q.set('playerId', playerId);
+    if (status) q.set('status', status);
+    const qs = q.toString();
+    return request(`/sessions/${sessionId}/incidents${qs ? `?${qs}` : ''}`);
+  },
+  getIncident: (sessionId, incidentId) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}`),
+  submitAction: (sessionId, incidentId, playerId, actionId) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}/actions`,
+      { method: 'POST', body: { playerId, actionId } }),
+  getIncidentActions: (sessionId, incidentId) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}/actions`),
+
+  // --- scores ---
+  getScoreboard: (sessionId) => request(`/sessions/${sessionId}/scores`),
+  getScoreEvents: (sessionId) => request(`/sessions/${sessionId}/scores/events`),
+};

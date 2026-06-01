@@ -1,37 +1,46 @@
-# Python Network Simulator
+# Network Simulator
 
-Placeholder for the Python simulator service.
+Standalone service that generates the game world. It is the **sole** source of network cells,
+incidents, and ongoing metric changes — the Spring backend no longer seeds anything.
 
-## Responsibility
-Generate time-series metric changes for network cells and fire incident events to the Game API.
+## How it works
 
-## Expected interface
+It polls the Game API and pushes state in via the internal ingest endpoints (it serves no
+requests itself):
 
-POST metrics update to Game API every N seconds:
-```json
-{
-  "sessionId": "1",
-  "cellId": "cell-17",
-  "metrics": { "userLoad": 92, "latency": 180, "packetLoss": 8, "alarmCount": 5 },
-  "timestamp": "..."
-}
+1. `GET /api/sessions` — find `ACTIVE` sessions.
+2. For a session it hasn't seeded: `GET /api/sessions/{id}/players`, build a **deterministic
+   plan seeded from the session id**, then `POST` identical cells + incidents for **both**
+   players (so the match is mirrored and fair).
+3. Each tick after that: drift healthy cells (`POST /api/internal/cells/{id}/metrics`) and
+   occasionally inject a new incident on both players' matching cell.
+
+Because the plan is seeded by the session id, a given session is **repeatable** (the spec's
+determinism requirement). Incident root causes match the backend `RootCause` enum so the game
+engine can evaluate player actions against them.
+
+## Run locally
+
+```bash
+BACKEND_URL=http://localhost:8080 python3 simulator.py
 ```
 
-POST incident event to Game API when an incident triggers:
-```json
-{
-  "sessionId": "1",
-  "incidentType": "CONFIG_CHANGE_DEGRADATION",
-  "affectedCells": ["cell-17"],
-  "evidenceFactors": ["NEIGHBOUR_CONFIG_CHANGED", "HIGH_PACKET_LOSS"],
-  "rootCause": "NEIGHBOUR_CONFIG_ROLLBACK_NEEDED",
-  "severity": "HIGH"
-}
-```
+Stdlib only (uses `urllib`) — no dependencies to install.
 
-## To do
-- [ ] Create `requirements.txt`
-- [ ] Implement `simulator.py` with seed-controlled metric generation
-- [ ] Add Dockerfile
-- [ ] Wire up incident triggers from GAME_LOGIC.md incident types
-- [ ] Add tests for output validity and seed repeatability
+## Configuration (env vars)
+
+| Var | Default | Meaning |
+|-----|---------|---------|
+| `BACKEND_URL` | `http://localhost:8080` | Game API base URL |
+| `SIM_INGEST_TOKEN` | _(empty)_ | If the backend sets `sim.ingest-token`, send the same value here |
+| `POLL_SECONDS` | `3` | Poll interval |
+| `CELL_COUNT` | `6` | Cells per player |
+| `DRIFT_EVERY_TICKS` | `2` | Drift healthy cells every N ticks |
+| `NEW_INCIDENT_EVERY_TICKS` | `8` | Inject a new incident every N ticks |
+| `MAX_INCIDENT_CELLS` | `5` | Cap on simultaneously-degraded cells |
+
+## Docker
+
+Built and wired as the `simulator` service in the repo's `docker-compose.yml`
+(`depends_on: backend`). In Kubernetes it runs as its own Deployment and only needs to reach
+the backend's ClusterIP — it is never exposed via Ingress.

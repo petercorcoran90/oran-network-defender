@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: simulator
+spec:
+  # Keep this at ONE replica — two simulators would double-generate incidents for a session.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: simulator
+  template:
+    metadata:
+      labels:
+        app: simulator
+    spec:
+      containers:
+        - name: simulator
+          image: oran-network-defender-simulator:latest
+          env:
+            - name: BACKEND_URL
+              value: "http://backend-service:8080"
+            - name: SIM_INGEST_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: oran-defender-secrets
+                  key: SIM_INGEST_TOKEN
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "128Mi"
+# No Service: the simulator only makes outbound calls to the backend; nothing connects to it.

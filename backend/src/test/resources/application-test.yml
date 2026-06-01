@@ -1,0 +1,16 @@
+# Test profile for integration/system tests (@ActiveProfiles("test")).
+# The datasource is supplied at runtime by a Testcontainers MySQL instance — see
+# AbstractMySqlIntegrationTest — so there is no datasource block here. We only override how
+# the schema is handled; everything else (incl. the MySQL dialect) is inherited from application.yml.
+spring:
+  jpa:
+    hibernate:
+      # 'create' (not create-drop): build the schema once on startup. The Testcontainers MySQL is
+      # thrown away when the JVM exits, so dropping tables at shutdown is pointless — and skipping
+      # it avoids noisy FK-order drop errors and a slow shutdown hook.
+      ddl-auto: create
+    show-sql: false
+  # The action catalog is seeded by DatabaseSeeder (CommandLineRunner), not by data.sql.
+  sql:
+    init:
+      mode: never

@@ -31,6 +31,14 @@ services:
       db:
         condition: service_healthy
 
+  simulator:
+    build: ./simulator
+    environment:
+      BACKEND_URL: http://backend:8080
+      # SIM_INGEST_TOKEN: ${SIM_INGEST_TOKEN}   # set here + as sim.ingest-token on the backend to lock down ingest
+    depends_on:
+      - backend
+
   frontend:
     build: ./frontend
     ports:
