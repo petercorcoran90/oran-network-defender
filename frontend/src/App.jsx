@@ -37,7 +37,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 // Same-window message; target the current origin (never '*') so it can't leak to another origin.
-function openTweaks() { window.postMessage({ type: '__activate_edit_mode' }, window.location.origin); }
+function openTweaks() { globalThis.postMessage({ type: '__activate_edit_mode' }, globalThis.location.origin); }
 
 function App() {
   const [conn, setConn] = useState(null); // real backend session: { user, session, playerId }
