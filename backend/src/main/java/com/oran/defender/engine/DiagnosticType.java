@@ -11,20 +11,30 @@ package com.oran.defender.engine;
  * trades a little speed for certainty against the heavy penalty of a wrong remediation.
  */
 public enum DiagnosticType {
-    TRACE_TRANSPORT("Trace transport link", "Transport link fault", RootCause.TRANSPORT_LINK_FAULT),
-    CHECK_NEIGHBOUR_CONFIG("Check neighbour configuration", "Recent neighbour config change", RootCause.NEIGHBOUR_CONFIG_CHANGE),
-    CHECK_UPGRADE_HISTORY("Check software-upgrade history", "Software-upgrade fault", RootCause.SOFTWARE_UPGRADE_FAULT),
-    RADIO_SCAN("Scan the radio environment", "Neighbour interference", RootCause.NEIGHBOUR_INTERFERENCE),
-    INSPECT_AUTOMATION("Inspect automation logs", "Rogue automation", RootCause.ROGUE_AUTOMATION),
-    CORRELATE_ALARMS("Correlate the alarm burst", "Alarm storm masking a real fault", RootCause.ALARM_STORM);
+    TRACE_TRANSPORT("Trace transport link", "Transport link fault",
+            "traceroute o-ru", "traceroute", RootCause.TRANSPORT_LINK_FAULT),
+    CHECK_NEIGHBOUR_CONFIG("Check neighbour configuration", "Recent neighbour config change",
+            "netconf get-config o-du", "netconf get-config", RootCause.NEIGHBOUR_CONFIG_CHANGE),
+    CHECK_UPGRADE_HISTORY("Check software-upgrade history", "Software-upgrade fault",
+            "kubectl rollout history deploy/o-du", "kubectl rollout history", RootCause.SOFTWARE_UPGRADE_FAULT),
+    RADIO_SCAN("Scan the radio environment", "Neighbour interference",
+            "pm-query cell --counters sinr,rsrp,pci", "pm-query", RootCause.NEIGHBOUR_INTERFERENCE),
+    INSPECT_AUTOMATION("Inspect automation logs", "Rogue automation",
+            "kubectl logs deploy/traffic-steering", "kubectl logs", RootCause.ROGUE_AUTOMATION),
+    CORRELATE_ALARMS("Correlate the alarm burst", "Alarm storm masking a real fault",
+            "fmcli list-alarms", "fmcli", RootCause.ALARM_STORM);
 
     private final String label;
     private final String hypothesis;
+    private final String command;
+    private final String match;
     private final RootCause implicates;
 
-    DiagnosticType(String label, String hypothesis, RootCause implicates) {
+    DiagnosticType(String label, String hypothesis, String command, String match, RootCause implicates) {
         this.label = label;
         this.hypothesis = hypothesis;
+        this.command = command;
+        this.match = match;
         this.implicates = implicates;
     }
 
@@ -36,6 +46,16 @@ public enum DiagnosticType {
     /** The hypothesis being tested, as a noun phrase (for the evidence message). */
     public String hypothesis() {
         return hypothesis;
+    }
+
+    /** The authentic console command that runs this diagnostic (shown in {@code help}). */
+    public String command() {
+        return command;
+    }
+
+    /** Normalised command prefix the console parser matches input against. */
+    public String match() {
+        return match;
     }
 
     /** The single root cause this diagnostic tests for. */
