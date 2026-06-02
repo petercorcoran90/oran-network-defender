@@ -202,7 +202,9 @@ def build_plan(session_id, cell_count):
 def seed_session(session):
     sid = session["id"]
     players = get("/api/sessions/%d/players" % sid)
-    if len(players) < 2:
+    # Need at least one player. Head-to-head only activates with two (ready-check); solo Training
+    # activates with one — so by the time a session is ACTIVE it has the players it needs.
+    if len(players) < 1:
         return
     cell_count = DIFFICULTY_CELLS.get(session.get("difficulty", "MEDIUM"), CELL_COUNT)
     names, incidents = build_plan(sid, cell_count)

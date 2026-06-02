@@ -149,4 +149,39 @@ class SessionControllerTest {
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.message").value("Session is full"));
     }
+
+    @Test
+    @DisplayName("POST /api/sessions/training -> 201 with the active solo session + playerId")
+    void startTraining() throws Exception {
+        GameSession s = new GameSession();
+        s.setId(9L);
+        s.setSessionCode("TRN001");
+        s.setName("ava — training");
+        s.setStatus(SessionStatus.ACTIVE);
+        s.setDifficulty(Difficulty.EASY);
+        s.setMode(GameSession.Mode.TRAINING);
+        s.setDurationSeconds(300);
+        Player p = new Player();
+        p.setId(2L);
+        p.setGameSession(s);
+        given(sessionService.createTrainingSession(7L, 300)).willReturn(p);
+
+        mvc.perform(post("/api/sessions/training").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"userId\":7,\"durationSeconds\":300}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.playerId").value(2))
+                .andExpect(jsonPath("$.session.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.session.mode").value("TRAINING"))
+                .andExpect(jsonPath("$.session.difficulty").value("EASY"));
+    }
+
+    @Test
+    @DisplayName("POST training without userId -> 400")
+    void startTrainingMissingUser() throws Exception {
+        mvc.perform(post("/api/sessions/training").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"durationSeconds\":300}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(sessionService);
+    }
 }

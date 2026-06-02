@@ -14,7 +14,8 @@ public record SessionResponse(
         Instant startedAt,
         Instant endedAt,
         Long forfeitedByPlayerId,
-        Long createdByUserId
+        Long createdByUserId,
+        String mode
 ) {
     public static SessionResponse from(GameSession s) {
         return new SessionResponse(
@@ -27,6 +28,7 @@ public record SessionResponse(
                 s.getStartedAt(),
                 s.getEndedAt(),
                 s.getForfeitedByPlayerId(),
-                s.getCreatedByUser() != null ? s.getCreatedByUser().getId() : null);
+                s.getCreatedByUser() != null ? s.getCreatedByUser().getId() : null,
+                s.getMode().name());
     }
 }
