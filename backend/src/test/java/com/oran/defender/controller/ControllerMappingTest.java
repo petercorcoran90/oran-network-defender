@@ -31,6 +31,7 @@ import com.oran.defender.repository.ActionRepository;
 import com.oran.defender.repository.MatchResultRepository;
 import com.oran.defender.service.IncidentService;
 import com.oran.defender.service.NetworkCellService;
+import com.oran.defender.service.ProgressionService;
 import com.oran.defender.service.ScoreService;
 import com.oran.defender.service.SessionService;
 import com.oran.defender.service.UserService;
@@ -52,6 +53,7 @@ class ControllerMappingTest {
     private SessionService sessionService;
     private IncidentService incidentService;
     private UserService userService;
+    private ProgressionService progressionService;
 
     private ActionController actionController;
     private HighScoreController highScoreController;
@@ -74,6 +76,7 @@ class ControllerMappingTest {
         sessionService = mock(SessionService.class);
         incidentService = mock(IncidentService.class);
         userService = mock(UserService.class);
+        progressionService = mock(ProgressionService.class);
 
         actionController = new ActionController(actionRepository);
         highScoreController = new HighScoreController(matchResultRepository);
@@ -81,7 +84,7 @@ class ControllerMappingTest {
         cellController = new NetworkCellController(cellService);
         sessionController = new SessionController(sessionService);
         incidentController = new IncidentController(incidentService);
-        userController = new UserController(userService);
+        userController = new UserController(userService, progressionService);
     }
 
     @AfterEach
@@ -354,7 +357,8 @@ class ControllerMappingTest {
     void incidentControllerGetIncidents() {
         Instant createdAt = Instant.parse("2026-06-01T10:00:00Z");
         IncidentResponse incident = new IncidentResponse(
-                6L, 1L, 2L, 5L, "Cell overload", "HIGH", "OPEN", "Overload", createdAt, null);
+                6L, 1L, 2L, 5L, "Cell overload", "HIGH", "OPEN", "Overload",
+                null, List.of(), List.of(), 0, createdAt, null);
         when(incidentService.getIncidents(1L, 2L, "OPEN")).thenReturn(List.of(incident));
 
         List<IncidentResponse> incidents = incidentController.getIncidents(1L, 2L, "OPEN");
@@ -370,7 +374,8 @@ class ControllerMappingTest {
     void incidentControllerGetIncident() {
         Instant createdAt = Instant.parse("2026-06-01T10:00:00Z");
         IncidentResponse incident = new IncidentResponse(
-                6L, 1L, 2L, 5L, "Cell overload", "HIGH", "OPEN", "Overload", createdAt, null);
+                6L, 1L, 2L, 5L, "Cell overload", "HIGH", "OPEN", "Overload",
+                null, List.of(), List.of(), 0, createdAt, null);
         when(incidentService.getIncident(1L, 6L)).thenReturn(incident);
 
         IncidentResponse response = incidentController.getIncident(1L, 6L);

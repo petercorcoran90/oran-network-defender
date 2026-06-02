@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.oran.defender.exception.ConflictException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.AppUser;
+import com.oran.defender.service.ProgressionService;
 import com.oran.defender.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -21,11 +22,13 @@ class UserControllerTest {
 
     private UserController userController;
     private UserService userService;
+    private ProgressionService progressionService;
 
     @BeforeEach
     void setUp() {
         userService = mock(UserService.class);
-        userController = new UserController(userService);
+        progressionService = mock(ProgressionService.class);
+        userController = new UserController(userService, progressionService);
     }
 
     @Test

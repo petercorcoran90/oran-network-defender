@@ -48,6 +48,11 @@ public class PlayerAction {
     @Column(name = "submitted_at", nullable = false)
     private Instant submittedAt = Instant.now();
 
+    // Not persisted: true when this submission is the first time the player used this action
+    // (so the UI can show the one-time "here's the CLI command" teaching modal).
+    @jakarta.persistence.Transient
+    private boolean newlyLearnedAction;
+
     public enum ActionResult {
         SUCCESS,
         FAILED,

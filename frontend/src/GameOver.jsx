@@ -11,11 +11,15 @@ export default function GameOver({ state, onExit }) {
   const players = [...state.players].sort((a, b) => b.score - a.score);
   const me = state.players.find((p) => p.you);
   const forfeitedBy = state.forfeitedBy;
+  const solo = state.mode === 'TRAINING' || players.length <= 1;
 
   let draw;
   let winnerId;
   let youWon;
-  if (forfeitedBy != null) {
+  if (solo) {
+    // Training: no opponent — it's about your score + how far you've progressed.
+    draw = false; winnerId = null; youWon = false;
+  } else if (forfeitedBy != null) {
     // Ragequit: whoever didn't leave wins, regardless of score.
     draw = false;
     const w = state.players.find((p) => p.id !== forfeitedBy);
@@ -27,8 +31,8 @@ export default function GameOver({ state, onExit }) {
     youWon = !!(me && winnerId === me.id);
   }
 
-  const banner = draw ? 'DRAW' : youWon ? 'YOU WIN' : 'YOU LOSE';
-  const bannerColor = draw ? 'var(--warn)' : youWon ? 'var(--good)' : 'var(--crit)';
+  const banner = solo ? 'TRAINING COMPLETE' : draw ? 'DRAW' : youWon ? 'YOU WIN' : 'YOU LOSE';
+  const bannerColor = solo ? 'var(--accent)' : draw ? 'var(--warn)' : youWon ? 'var(--good)' : 'var(--crit)';
 
   const myEvents = (state.activity || []).filter((a) => me && a.playerId === me.id);
   const best = myEvents.length ? myEvents.reduce((a, b) => (b.points > a.points ? b : a)) : null;
@@ -53,7 +57,7 @@ export default function GameOver({ state, onExit }) {
         </div>
         <div className="panel-pad">
           <div style={{ textAlign: 'center', margin: '6px 0 18px' }}>
-            <div style={{ fontFamily: 'var(--font-head)', fontSize: 40, fontWeight: 700, color: bannerColor, letterSpacing: '.04em' }}>{banner}</div>
+            <div style={{ fontFamily: 'var(--font-head)', fontSize: solo ? 26 : 40, fontWeight: 700, color: bannerColor, letterSpacing: '.04em' }}>{banner}</div>
             {forfeitedBy != null && (
               <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 4 }}>
                 {youWon ? 'Your opponent forfeited the match.' : 'You forfeited the match.'}
@@ -85,6 +89,7 @@ export default function GameOver({ state, onExit }) {
 
           <div className="panel" style={{ background: 'var(--inset)', padding: 'var(--pad)', marginBottom: 16 }}>
             <div className="kv"><span className="k">Your final network health</span><span className="v mono">{health}%</span></div>
+            {solo && <div className="kv"><span className="k">Tier reached</span><span className="v mono">{state.tier}</span></div>}
             {decision('Best decision', best, 'var(--good)')}
             {decision('Worst decision', worst, 'var(--crit)')}
           </div>

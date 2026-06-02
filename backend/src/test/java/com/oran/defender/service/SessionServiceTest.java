@@ -35,6 +35,7 @@ class SessionServiceTest {
     @Mock private PlayerRepository playerRepository;
     @Mock private AppUserRepository userRepository;
     @Mock private MatchResultRepository matchResultRepository;
+    @Mock private ProgressionService progressionService;
 
     private SessionService sessionService;
 
@@ -45,7 +46,8 @@ class SessionServiceTest {
     @BeforeEach
     void setUp() {
         sessionService = new SessionService(
-                sessionRepository, playerRepository, userRepository, matchResultRepository);
+                sessionRepository, playerRepository, userRepository, matchResultRepository,
+                progressionService);
 
         AppUser creatorUser = new AppUser();
         creatorUser.setId(1L);

@@ -9,7 +9,12 @@ vi.mock('./api.js', () => ({
     getIncidents: vi.fn(),
     getScoreEvents: vi.fn(),
     getActions: vi.fn(),
+    getUserSkills: vi.fn(),
+    getManual: vi.fn(),
     submitAction: vi.fn(),
+    runDiagnostic: vi.fn(),
+    getDiagnostics: vi.fn(),
+    runConsole: vi.fn(),
     leaveSession: vi.fn(),
   },
 }));
@@ -59,12 +64,16 @@ describe('createBackendStore', () => {
       { id: 10, cellName: 'Cell-A', healthStatus: 'WARNING', signalQuality: 80, userLoad: 50, latency: 30, packetLoss: 2, configStatus: 'STABLE' },
     ]);
     Api.getIncidents.mockResolvedValue([
-      { id: 5, cellId: 10, incidentType: 'Cell overload', severity: 'HIGH', status: 'RESOLVED', createdAt: '2026-06-01T10:00:00Z', description: 'Overloaded' },
+      { id: 5, cellId: 10, incidentType: 'Congestion', severity: 'HIGH', status: 'RESOLVED',
+        symptomGroup: 'Congestion',
+        availableDiagnostics: [{ name: 'INSPECT_AUTOMATION', label: 'Inspect automation logs' }],
+        createdAt: '2026-06-01T10:00:00Z', description: 'Overloaded' },
     ]);
     Api.getScoreEvents.mockResolvedValue([
       { id: 1, playerId: 2, points: 140, reason: 'Cell overload / CORRECT', createdAt: '2026-06-01T10:00:00Z' },
     ]);
     Api.getActions.mockResolvedValue([{ id: 4, actionName: 'REBALANCE_TRAFFIC', description: 'Move load' }]);
+    Api.getUserSkills.mockResolvedValue({ learnedActions: ['REBALANCE_TRAFFIC'], learnedDiagnostics: [], tier: 'TRAINEE' });
   });
 
   afterEach(() => store?.stop());
@@ -75,15 +84,20 @@ describe('createBackendStore', () => {
 
     const s = store.getState();
     const inc = s.incidents[0];
-    expect(inc.title).toBe('Cell overload');
+    expect(inc.title).toBe('Congestion');
     expect(inc.severity).toBe('high');      // lowercased for the UI
     expect(inc.status).toBe('resolved');
     expect(inc.rec).toEqual([]);            // the hidden root cause is never sent to the client
+    expect(inc.symptomGroup).toBe('Congestion');
+    expect(inc.diagnostics).toEqual([{ name: 'INSPECT_AUTOMATION', label: 'Inspect automation logs' }]);
 
     expect(s.cells[0].health).toBe(58);     // WARNING -> 58
     const me = s.players.find((p) => p.you);
     expect(me.id).toBe(2);
     expect(me.score).toBe(140);
+
+    expect(s.learnedActions).toEqual(['REBALANCE_TRAFFIC']);  // progression folded into state
+    expect(s.tier).toBe('TRAINEE');
   });
 
   it('applyAction submits to the backend with numeric ids and returns the outcome', async () => {
@@ -94,5 +108,44 @@ describe('createBackendStore', () => {
     const outcome = await store.applyAction('5', '4');
     expect(Api.submitAction).toHaveBeenCalledWith(1, 5, 2, 4);
     expect(outcome).toEqual({ result: 'SUCCESS', pointsAwarded: 140 });
+  });
+
+  it('runDiagnostic / getDiagnostics call the API with numeric ids', async () => {
+    Api.runDiagnostic.mockResolvedValue({ diagnostic: 'INSPECT_AUTOMATION', result: 'RULES_OUT' });
+    Api.getDiagnostics.mockResolvedValue([]);
+    store = createBackendStore({ session: { id: 1, sessionCode: 'ABC', status: 'ACTIVE' }, user: { username: 'ava' }, playerId: 2 });
+    await vi.waitFor(() => expect(store.getState().incidents).toHaveLength(1));
+
+    const ev = await store.runDiagnostic('5', 'INSPECT_AUTOMATION');
+    expect(Api.runDiagnostic).toHaveBeenCalledWith(1, 5, 2, 'INSPECT_AUTOMATION');
+    expect(ev).toEqual({ diagnostic: 'INSPECT_AUTOMATION', result: 'RULES_OUT' });
+
+    await store.getDiagnostics('5');
+    expect(Api.getDiagnostics).toHaveBeenCalledWith(1, 5, 2);
+  });
+
+  it('runConsole sends the command with numeric ids, and returns errors as printable output', async () => {
+    Api.runConsole.mockResolvedValue({ recognised: true, output: '57% loss' });
+    store = createBackendStore({ session: { id: 1, sessionCode: 'ABC', status: 'ACTIVE' }, user: { username: 'ava' }, playerId: 2 });
+    await vi.waitFor(() => expect(store.getState().incidents).toHaveLength(1));
+
+    const ok = await store.runConsole('5', 'traceroute o-ru');
+    expect(Api.runConsole).toHaveBeenCalledWith(1, 5, 2, 'traceroute o-ru');
+    expect(ok.output).toBe('57% loss');
+
+    Api.runConsole.mockRejectedValue(new Error('Investigation budget used up'));
+    const err = await store.runConsole('5', 'kubectl logs x');
+    expect(err.recognised).toBe(false);
+    expect(err.output).toContain('budget');
+  });
+
+  it('getManual fetches the field manual for the user', async () => {
+    Api.getManual.mockResolvedValue({ tier: 'TRAINEE', diagnostics: [], actions: [], diagnosticsTotal: 6, actionsTotal: 9 });
+    store = createBackendStore({ session: { id: 1, sessionCode: 'ABC', status: 'ACTIVE' }, user: { username: 'ava', id: 7 }, playerId: 2 });
+    await vi.waitFor(() => expect(store.getState().incidents).toHaveLength(1));
+
+    const m = await store.getManual();
+    expect(Api.getManual).toHaveBeenCalledWith(7);
+    expect(m.tier).toBe('TRAINEE');
   });
 });

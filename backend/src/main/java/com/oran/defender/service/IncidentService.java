@@ -1,14 +1,22 @@
 package com.oran.defender.service;
 
+import com.oran.defender.dto.ConsoleResponse;
 import com.oran.defender.dto.IncidentResponse;
 import com.oran.defender.engine.ActionType;
+import com.oran.defender.engine.ConsoleRenderer;
+import com.oran.defender.engine.DiagnosticEvaluator;
+import com.oran.defender.engine.DiagnosticType;
 import com.oran.defender.engine.EvaluationResult;
+import com.oran.defender.engine.Evidence;
+import com.oran.defender.engine.EvidenceResult;
 import com.oran.defender.engine.IncidentEvaluator;
 import com.oran.defender.engine.RootCause;
 import com.oran.defender.engine.ScoreCalculator;
+import com.oran.defender.engine.SymptomGroup;
 import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.Action;
+import com.oran.defender.model.DiagnosticRun;
 import com.oran.defender.model.GameSession.SessionStatus;
 import com.oran.defender.model.GameSession;
 import com.oran.defender.model.Incident;
@@ -20,6 +28,7 @@ import com.oran.defender.model.Player;
 import com.oran.defender.model.PlayerAction;
 import com.oran.defender.model.PlayerAction.ActionResult;
 import com.oran.defender.repository.ActionRepository;
+import com.oran.defender.repository.DiagnosticRunRepository;
 import com.oran.defender.repository.IncidentRepository;
 import com.oran.defender.repository.NetworkCellRepository;
 import com.oran.defender.repository.PlayerActionRepository;
@@ -28,6 +37,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -44,6 +54,15 @@ public class IncidentService {
     private final IncidentEvaluator incidentEvaluator;
     private final ScoreCalculator scoreCalculator;
     private final ScoreService scoreService;
+    private final DiagnosticEvaluator diagnosticEvaluator;
+    private final DiagnosticRunRepository diagnosticRunRepository;
+    private final ConsoleRenderer consoleRenderer;
+    private final ProgressionService progressionService;
+
+    // Each diagnostic a player runs costs this many points off the eventual remediation score, so
+    // investigating is a real expense — the accurate, economical player beats the fast guesser,
+    // and "diagnose everything" is a bad strategy. Combined with the per-incident budget below.
+    static final int DIAGNOSTIC_COST = 15;
 
     public IncidentService(IncidentRepository incidentRepository,
                            PlayerRepository playerRepository,
@@ -52,7 +71,11 @@ public class IncidentService {
                            NetworkCellRepository cellRepository,
                            IncidentEvaluator incidentEvaluator,
                            ScoreCalculator scoreCalculator,
-                           ScoreService scoreService) {
+                           ScoreService scoreService,
+                           DiagnosticEvaluator diagnosticEvaluator,
+                           DiagnosticRunRepository diagnosticRunRepository,
+                           ConsoleRenderer consoleRenderer,
+                           ProgressionService progressionService) {
         this.incidentRepository = incidentRepository;
         this.playerRepository = playerRepository;
         this.actionRepository = actionRepository;
@@ -61,6 +84,10 @@ public class IncidentService {
         this.incidentEvaluator = incidentEvaluator;
         this.scoreCalculator = scoreCalculator;
         this.scoreService = scoreService;
+        this.diagnosticEvaluator = diagnosticEvaluator;
+        this.diagnosticRunRepository = diagnosticRunRepository;
+        this.consoleRenderer = consoleRenderer;
+        this.progressionService = progressionService;
     }
 
     @Transactional(readOnly = true)
@@ -120,7 +147,11 @@ public class IncidentService {
         ActionType actionType = ActionType.valueOf(action.getActionName());
         long responseSeconds = Duration.between(incident.getCreatedAt(), Instant.now()).getSeconds();
         EvaluationResult verdict = incidentEvaluator.evaluate(rootCause, actionType);
-        int points = scoreCalculator.pointsFor(verdict, responseSeconds, actionType);
+        // Subtract the cost of investigating: every diagnostic this player ran on this incident
+        // costs real points, so over-investigating is penalised regardless of the outcome.
+        long diagnostics = diagnosticRunRepository.countByIncidentIdAndPlayerId(incidentId, playerId);
+        int points = scoreCalculator.pointsFor(verdict, responseSeconds, actionType)
+                - (int) diagnostics * DIAGNOSTIC_COST;
 
         PlayerAction playerAction = new PlayerAction();
         playerAction.setPlayer(player);
@@ -134,6 +165,12 @@ public class IncidentService {
                 incident.getIncidentType() + " / " + verdict.name(), points);
         applyOutcome(incident, verdict);
 
+        // Using an action teaches it: record it against the player (persisted across matches) and
+        // flag whether this was the first time, so the UI can show the one-time CLI lesson.
+        Long userId = player.getUser().getId();
+        saved.setNewlyLearnedAction(!progressionService.hasLearnedAction(userId, actionType));
+        progressionService.learnAction(userId, actionType);
+
         return saved;
     }
 
@@ -141,6 +178,182 @@ public class IncidentService {
     public List<PlayerAction> getActionsForIncident(Long sessionId, Long incidentId) {
         loadIncidentInSession(sessionId, incidentId); // 404 if it isn't in this session
         return playerActionRepository.findByIncidentId(incidentId);
+    }
+
+    /**
+     * Runs a diagnostic against the incident's hidden root cause and records the evidence. Same
+     * ownership/state guards as {@link #submitAction}. Idempotent: re-running a diagnostic returns
+     * the already-recorded evidence (so the player isn't charged time twice). The diagnostic must
+     * be one of those relevant to the incident's symptom group.
+     */
+    @Transactional
+    public DiagnosticRun runDiagnostic(Long sessionId, Long incidentId, Long playerId, String diagnosticName) {
+        Incident incident = loadIncidentInSession(sessionId, incidentId);
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new NotFoundException("Player not found"));
+        if (!player.getGameSession().getId().equals(sessionId)) {
+            throw new InvalidActionException("Player is not part of this session");
+        }
+        if (!incident.getPlayer().getId().equals(playerId)) {
+            throw new InvalidActionException("Incident does not belong to this player");
+        }
+        if (incident.getGameSession().getStatus() != SessionStatus.ACTIVE) {
+            throw new InvalidActionException("Session is not active");
+        }
+        if (incident.getStatus() != IncidentStatus.OPEN) {
+            throw new InvalidActionException("Incident is already resolved");
+        }
+
+        DiagnosticType diagnostic = parseDiagnostic(diagnosticName);
+        RootCause rootCause = RootCause.valueOf(incident.getRootCause());
+        SymptomGroup group = SymptomGroup.of(rootCause);
+        if (!group.diagnostics().contains(diagnostic)) {
+            throw new InvalidActionException("Diagnostic does not apply to this incident");
+        }
+
+        // Idempotent: if this diagnostic was already run, return the existing evidence (free).
+        Optional<DiagnosticRun> existing = diagnosticRunRepository
+                .findByIncidentIdAndPlayerIdAndDiagnosticType(incidentId, playerId, diagnostic.name());
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        // Otherwise it's a new test — enforce the per-incident investigation budget.
+        long used = diagnosticRunRepository.countByIncidentIdAndPlayerId(incidentId, playerId);
+        if (used >= group.diagnosticBudget()) {
+            throw new InvalidActionException("Investigation budget used up — commit a remediation");
+        }
+        Evidence evidence = diagnosticEvaluator.diagnose(rootCause, diagnostic);
+        DiagnosticRun run = new DiagnosticRun();
+        run.setIncident(incident);
+        run.setPlayer(player);
+        run.setDiagnosticType(diagnostic.name());
+        run.setResult(evidence.result().name());
+        run.setImplicated(evidence.implicated().name());
+        DiagnosticRun saved = diagnosticRunRepository.save(run);
+        // Running a diagnostic teaches it (persisted) — feeds the tier + field manual.
+        progressionService.learnDiagnostic(player.getUser().getId(), diagnostic);
+        return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public List<DiagnosticRun> getDiagnostics(Long sessionId, Long incidentId, Long playerId) {
+        loadIncidentInSession(sessionId, incidentId); // 404 if it isn't in this session
+        return diagnosticRunRepository.findByIncidentIdAndPlayerId(incidentId, playerId);
+    }
+
+    /**
+     * The diagnostic console. Recognised diagnostic commands relevant to this incident run the real
+     * diagnostic (budget + cost via {@link #runDiagnostic}); utility commands (help/man/clear) and
+     * unrecognised input are free. Returns emulated terminal output for the player to interpret —
+     * never the hidden root cause.
+     */
+    @Transactional
+    public ConsoleResponse runConsoleCommand(Long sessionId, Long incidentId, Long playerId, String commandLine) {
+        Incident incident = requireOwnOpenIncident(sessionId, incidentId, playerId);
+        String norm = ConsoleRenderer.normalise(commandLine);
+
+        if (norm.isEmpty() || norm.equals("clear")) {
+            return new ConsoleResponse(commandLine, true, "");
+        }
+        if (norm.equals("help") || norm.equals("?")) {
+            return new ConsoleResponse(commandLine, true, helpText(incident));
+        }
+        if (norm.startsWith("man ")) {
+            return new ConsoleResponse(commandLine, true, manText(norm.substring(4).trim()));
+        }
+
+        // A remediation command — apply it (same engine + scoring + learning as the button).
+        ActionType actionCmd = consoleRenderer.matchAction(commandLine).orElse(null);
+        if (actionCmd != null) {
+            if (!consoleRenderer.hasRequiredArgs(commandLine, actionCmd.requiredArgs())) {
+                return new ConsoleResponse(commandLine, true, missingArgs(actionCmd.match()));
+            }
+            Long actionId = actionRepository.findByActionName(actionCmd.name())
+                    .orElseThrow(() -> new NotFoundException("Action not found")).getId();
+            PlayerAction pa = submitAction(sessionId, incidentId, playerId, actionId);
+            return new ConsoleResponse(commandLine, true, actionOutcomeText(actionCmd, pa));
+        }
+
+        DiagnosticType type = consoleRenderer.match(commandLine).orElse(null);
+        if (type == null) {
+            String cmd = norm.split(" ")[0];
+            return new ConsoleResponse(commandLine, false, "command not found: " + cmd + " — type 'help'");
+        }
+        if (!consoleRenderer.hasRequiredArgs(commandLine, type.requiredArgs())) {
+            return new ConsoleResponse(commandLine, true, missingArgs(type.match()));
+        }
+
+        SymptomGroup group = SymptomGroup.of(RootCause.valueOf(incident.getRootCause()));
+        if (!group.diagnostics().contains(type)) {
+            // A real command, but it probes a subsystem unrelated to this incident — nominal, free.
+            return new ConsoleResponse(commandLine, true,
+                    consoleRenderer.render(type, EvidenceResult.RULES_OUT) + "\n(no bearing on this incident)");
+        }
+
+        // A relevant diagnostic — runs the real thing (enforces budget + point cost, records it).
+        DiagnosticRun run = runDiagnostic(sessionId, incidentId, playerId, type.name());
+        return new ConsoleResponse(commandLine, true,
+                consoleRenderer.render(type, EvidenceResult.valueOf(run.getResult())));
+    }
+
+    private String missingArgs(String name) {
+        return name + ": missing or invalid arguments — try 'man " + name + "'";
+    }
+
+    private String helpText(Incident incident) {
+        SymptomGroup group = SymptomGroup.of(RootCause.valueOf(incident.getRootCause()));
+        StringBuilder sb = new StringBuilder("Commands for this incident (run 'man <command>' for its arguments):\n");
+        // Names only — the player must learn the arguments (man) or already know them.
+        group.diagnostics().forEach(d -> sb.append("  ").append(d.match()).append('\n'));
+        return sb.append("Utility: help · man <command> · clear").toString();
+    }
+
+    private String manText(String cmd) {
+        var diag = consoleRenderer.match(cmd);
+        if (diag.isPresent()) {
+            DiagnosticType d = diag.get();
+            return d.command() + "\n  Investigates: " + d.hypothesis() + ".";
+        }
+        return consoleRenderer.matchAction(cmd)
+                .map(a -> a.command() + "\n  Remediation: applies the '" + a.name() + "' fix.")
+                .orElse("No manual entry for " + cmd);
+    }
+
+    private String actionOutcomeText(ActionType action, PlayerAction pa) {
+        int pts = pa.getPointsAwarded();
+        String verdict = switch (pa.getResult()) {
+            case SUCCESS -> "✓ resolved";
+            case FAILED -> "✗ wrong action — it backfired";
+            case PARTIAL -> "• no effect — try a different fix";
+        };
+        return action.command() + "\n" + verdict + " (" + (pts >= 0 ? "+" : "") + pts + " pts)";
+    }
+
+    private Incident requireOwnOpenIncident(Long sessionId, Long incidentId, Long playerId) {
+        Incident incident = loadIncidentInSession(sessionId, incidentId);
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new NotFoundException("Player not found"));
+        if (!player.getGameSession().getId().equals(sessionId)) {
+            throw new InvalidActionException("Player is not part of this session");
+        }
+        if (!incident.getPlayer().getId().equals(playerId)) {
+            throw new InvalidActionException("Incident does not belong to this player");
+        }
+        if (incident.getGameSession().getStatus() != SessionStatus.ACTIVE) {
+            throw new InvalidActionException("Session is not active");
+        }
+        if (incident.getStatus() != IncidentStatus.OPEN) {
+            throw new InvalidActionException("Incident is already resolved");
+        }
+        return incident;
+    }
+
+    private DiagnosticType parseDiagnostic(String name) {
+        try {
+            return DiagnosticType.valueOf(name);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new InvalidActionException("Unknown diagnostic: " + name);
+        }
     }
 
     private Incident loadIncidentInSession(Long sessionId, Long incidentId) {

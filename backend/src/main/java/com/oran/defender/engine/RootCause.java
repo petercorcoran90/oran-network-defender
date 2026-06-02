@@ -22,21 +22,28 @@ import java.util.Set;
  * <i>correct</i> action, whereas for every real incident {@code IGNORE} is a trap.
  */
 public enum RootCause {
-    CELL_OVERLOAD(ActionType.REBALANCE_TRAFFIC, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
-    NEIGHBOUR_CONFIG_CHANGE(ActionType.ROLLBACK_CONFIG, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
-    TRANSPORT_LINK_FAULT(ActionType.ESCALATE, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
-    ALARM_STORM(ActionType.FILTER_ALARMS, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
-    NEIGHBOUR_INTERFERENCE(ActionType.INCREASE_TRANSMIT_POWER, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
-    SOFTWARE_UPGRADE_FAULT(ActionType.ROLLBACK_SOFTWARE, Set.of(ActionType.INCREASE_TRANSMIT_POWER, ActionType.IGNORE)),
-    ROGUE_AUTOMATION(ActionType.DISABLE_AUTOMATION, Set.of(ActionType.REBALANCE_TRAFFIC, ActionType.IGNORE)),
-    FALSE_ALARM(ActionType.IGNORE, Set.of(ActionType.RESTART_CELL));
+    CELL_OVERLOAD("Cell overload", ActionType.REBALANCE_TRAFFIC, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
+    NEIGHBOUR_CONFIG_CHANGE("Neighbour config change", ActionType.ROLLBACK_CONFIG, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
+    TRANSPORT_LINK_FAULT("Transport link fault", ActionType.ESCALATE, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
+    ALARM_STORM("Alarm storm", ActionType.FILTER_ALARMS, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
+    NEIGHBOUR_INTERFERENCE("Neighbour interference", ActionType.INCREASE_TRANSMIT_POWER, Set.of(ActionType.RESTART_CELL, ActionType.IGNORE)),
+    SOFTWARE_UPGRADE_FAULT("Software upgrade fault", ActionType.ROLLBACK_SOFTWARE, Set.of(ActionType.INCREASE_TRANSMIT_POWER, ActionType.IGNORE)),
+    ROGUE_AUTOMATION("Rogue automation", ActionType.DISABLE_AUTOMATION, Set.of(ActionType.REBALANCE_TRAFFIC, ActionType.IGNORE)),
+    FALSE_ALARM("False alarm", ActionType.IGNORE, Set.of(ActionType.RESTART_CELL));
 
+    private final String label;
     private final ActionType correctAction;
     private final Set<ActionType> trapActions;
 
-    RootCause(ActionType correctAction, Set<ActionType> trapActions) {
+    RootCause(String label, ActionType correctAction, Set<ActionType> trapActions) {
+        this.label = label;
         this.correctAction = correctAction;
         this.trapActions = trapActions;
+    }
+
+    /** Friendly display name for the candidate list (the cause itself stays hidden until deduced). */
+    public String label() {
+        return label;
     }
 
     public ActionType correctAction() {

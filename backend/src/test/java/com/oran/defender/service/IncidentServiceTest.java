@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.oran.defender.engine.ConsoleRenderer;
+import com.oran.defender.engine.DiagnosticEvaluator;
 import com.oran.defender.engine.EvaluationResult;
 import com.oran.defender.engine.IncidentEvaluator;
 import com.oran.defender.engine.ScoreCalculator;
@@ -21,6 +23,7 @@ import com.oran.defender.model.NetworkCell;
 import com.oran.defender.model.Player;
 import com.oran.defender.model.PlayerAction;
 import com.oran.defender.repository.ActionRepository;
+import com.oran.defender.repository.DiagnosticRunRepository;
 import com.oran.defender.repository.IncidentRepository;
 import com.oran.defender.repository.NetworkCellRepository;
 import com.oran.defender.repository.PlayerActionRepository;
@@ -47,6 +50,10 @@ class IncidentServiceTest {
     @Mock private IncidentEvaluator incidentEvaluator;
     @Mock private ScoreCalculator scoreCalculator;
     @Mock private ScoreService scoreService;
+    @Mock private DiagnosticEvaluator diagnosticEvaluator;
+    @Mock private DiagnosticRunRepository diagnosticRunRepository;
+    @Mock private ConsoleRenderer consoleRenderer;
+    @Mock private ProgressionService progressionService;
 
     private IncidentService incidentService;
 
@@ -62,7 +69,8 @@ class IncidentServiceTest {
         incidentService = new IncidentService(
                 incidentRepository, playerRepository, actionRepository,
                 playerActionRepository, cellRepository,
-                incidentEvaluator, scoreCalculator, scoreService);
+                incidentEvaluator, scoreCalculator, scoreService,
+                diagnosticEvaluator, diagnosticRunRepository, consoleRenderer, progressionService);
 
         session = new GameSession();
         session.setId(1L);
