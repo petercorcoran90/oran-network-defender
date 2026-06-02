@@ -70,6 +70,13 @@ describe('Api client', () => {
     expect(fetch).toHaveBeenCalledWith('/api/users/7/manual', expect.anything());
   });
 
+  it('startTraining POSTs to the training endpoint', async () => {
+    await Api.startTraining(7, 600);
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toBe('/api/sessions/training');
+    expect(JSON.parse(opts.body)).toEqual({ userId: 7, durationSeconds: 600 });
+  });
+
   it('runConsole POSTs the command to the incident', async () => {
     await Api.runConsole(1, 3, 2, 'traceroute o-ru');
     const [url, opts] = fetch.mock.calls[0];

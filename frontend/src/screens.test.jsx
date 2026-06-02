@@ -5,6 +5,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 vi.mock('./NetworkMap3D.jsx', () => ({ NetworkMap: () => null }));
 
 import { Incidents, Scoreboard, IncidentDetail, Actions } from './screens.jsx';
+import GameOver from './GameOver.jsx';
 
 describe('Incidents screen', () => {
   it('lists incidents and shows the active count', () => {
@@ -185,5 +186,20 @@ describe('Field Manual', () => {
     render(<Actions state={{ version: 1, activity: [] }} store={store} nav={() => {}} />);
 
     expect(await screen.findByText(/Run diagnostics on incidents to learn them/)).toBeInTheDocument();
+  });
+});
+
+describe('GameOver (solo training)', () => {
+  it('shows a training-complete summary with the tier, not win/lose', () => {
+    const state = {
+      game: 'TRN001', mode: 'TRAINING', tier: 'OPERATOR',
+      players: [{ id: 1, name: 'ava', you: true, score: 120, resolved: 2 }],
+      activity: [], cells: [],
+    };
+    render(<GameOver state={state} onExit={() => {}} />);
+
+    expect(screen.getByText('TRAINING COMPLETE')).toBeInTheDocument();
+    expect(screen.getByText('OPERATOR')).toBeInTheDocument();
+    expect(screen.queryByText('YOU WIN')).toBeNull();
   });
 });

@@ -103,6 +103,7 @@ function emptyState(conn) {
     forfeitedBy: conn.session.forfeitedByPlayerId ?? null,
     config: { difficulty: 'normal', simSpeed: 1 },
     learnedActions: [], learnedDiagnostics: [], tier: 'TRAINEE',
+    mode: conn.session.mode || 'HEAD_TO_HEAD',
     version: 0,
   };
 }
@@ -195,6 +196,7 @@ export function createBackendStore(conn) {
       learnedActions: skills?.learnedActions || [],
       learnedDiagnostics: skills?.learnedDiagnostics || [],
       tier: skills?.tier || 'TRAINEE',
+      mode: session.mode || 'HEAD_TO_HEAD',
       version: state.version + 1,
     };
   }

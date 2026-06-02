@@ -50,6 +50,8 @@ export const Api = {
   // --- sessions ---
   createSession: (name, createdByUserId, durationSeconds, difficulty) =>
     request('/sessions', { method: 'POST', body: { name, createdByUserId, durationSeconds, difficulty } }),
+  startTraining: (userId, durationSeconds) =>
+    request('/sessions/training', { method: 'POST', body: { userId, durationSeconds } }),
   listSessions: () => request('/sessions'),
   getSession: (id) => request(`/sessions/${id}`),
   getSessionByCode: (code) => request(`/sessions/code/${encodeURIComponent(code)}`),

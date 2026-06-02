@@ -81,6 +81,14 @@ export default function Lobby({ onEnter }) {
     }).catch(() => {});
   }
 
+  // --- solo training: activates immediately at your tier's difficulty, no opponent ---
+  async function startTraining() {
+    await run(async () => {
+      const tr = await Api.startTraining(user.id, Number(minutes) * 60);
+      onEnter({ user, session: tr.session, playerId: tr.playerId });
+    }).catch(() => {});
+  }
+
   // --- create + auto-join as the creator ---
   async function createMatch() {
     await run(async () => {
@@ -234,6 +242,15 @@ export default function Lobby({ onEnter }) {
                 <button className="btn" disabled={busy || !joinCode.trim()} onClick={joinByCode}>Join match</button>
               </div>
               <button className="btn ghost" disabled={busy} onClick={loadSessions} style={{ width: '100%', justifyContent: 'center' }}>Or browse open matches</button>
+
+              <div className="panel" style={{ background: 'var(--inset)', padding: 'var(--pad)', marginTop: 14 }}>
+                <p style={{ color: 'var(--text-3)', fontSize: 12, margin: '0 0 10px' }}>
+                  Solo training · no opponent · difficulty is set by your tier and rises as you learn.
+                </p>
+                <button className="btn" disabled={busy} onClick={startTraining} style={{ width: '100%', justifyContent: 'center' }}>
+                  {busy ? 'Working…' : 'Start training'}
+                </button>
+              </div>
             </>
           )}
 
