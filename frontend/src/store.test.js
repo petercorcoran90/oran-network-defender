@@ -12,6 +12,7 @@ vi.mock('./api.js', () => ({
     submitAction: vi.fn(),
     runDiagnostic: vi.fn(),
     getDiagnostics: vi.fn(),
+    runConsole: vi.fn(),
     leaveSession: vi.fn(),
   },
 }));
@@ -115,5 +116,20 @@ describe('createBackendStore', () => {
 
     await store.getDiagnostics('5');
     expect(Api.getDiagnostics).toHaveBeenCalledWith(1, 5, 2);
+  });
+
+  it('runConsole sends the command with numeric ids, and returns errors as printable output', async () => {
+    Api.runConsole.mockResolvedValue({ recognised: true, output: '57% loss' });
+    store = createBackendStore({ session: { id: 1, sessionCode: 'ABC', status: 'ACTIVE' }, user: { username: 'ava' }, playerId: 2 });
+    await vi.waitFor(() => expect(store.getState().incidents).toHaveLength(1));
+
+    const ok = await store.runConsole('5', 'traceroute o-ru');
+    expect(Api.runConsole).toHaveBeenCalledWith(1, 5, 2, 'traceroute o-ru');
+    expect(ok.output).toBe('57% loss');
+
+    Api.runConsole.mockRejectedValue(new Error('Investigation budget used up'));
+    const err = await store.runConsole('5', 'kubectl logs x');
+    expect(err.recognised).toBe(false);
+    expect(err.output).toContain('budget');
   });
 });

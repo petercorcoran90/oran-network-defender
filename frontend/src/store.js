@@ -226,6 +226,16 @@ export function createBackendStore(conn) {
     return Api.getDiagnostics(sessionId, Number(incidentId), playerId);
   }
 
+  // Diagnostic console: send a command, get emulated output. Errors (budget/guard) are returned
+  // as printable output so the terminal can show them.
+  async function runConsole(incidentId, command) {
+    try {
+      return await Api.runConsole(sessionId, Number(incidentId), playerId, command);
+    } catch (e) {
+      return { command, recognised: false, output: e?.message || 'error' };
+    }
+  }
+
   function acknowledge() { /* backend has no acknowledge step — no-op */ }
 
   // Leave the match — ends the session so the opponent is shown the result too.
@@ -252,6 +262,7 @@ export function createBackendStore(conn) {
     applyAction,
     runDiagnostic,
     getDiagnostics,
+    runConsole,
     acknowledge,
     setConfig,
     leave,

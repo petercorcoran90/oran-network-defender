@@ -60,6 +60,14 @@ describe('Api client', () => {
       '/api/sessions/1/incidents/3/diagnostics?playerId=2', expect.anything());
   });
 
+  it('runConsole POSTs the command to the incident', async () => {
+    await Api.runConsole(1, 3, 2, 'traceroute o-ru');
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toBe('/api/sessions/1/incidents/3/console');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual({ playerId: 2, command: 'traceroute o-ru' });
+  });
+
   it('throws ApiError carrying the backend status and message on a non-ok response', async () => {
     fetch.mockResolvedValue(response({
       ok: false, status: 400,

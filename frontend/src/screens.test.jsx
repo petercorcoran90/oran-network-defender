@@ -65,6 +65,7 @@ describe('IncidentDetail action submission', () => {
       applyAction: vi.fn().mockResolvedValue({ result: 'SUCCESS', pointsAwarded: 140 }),
       getDiagnostics: vi.fn().mockResolvedValue([]),
       runDiagnostic: vi.fn(),
+      runConsole: vi.fn().mockResolvedValue({ recognised: true, output: '' }),
       ...extra,
     };
   }
@@ -121,5 +122,19 @@ describe('IncidentDetail action submission', () => {
     expect(screen.queryByText(/Deduced — apply/)).toBeNull();           // no auto-answer
     // budget is 1 — the test is now spent, so the diagnostic can't be run again.
     expect(screen.getByRole('button', { name: /Inspect automation logs/ })).toBeDisabled();
+  });
+
+  it('runs a console command and prints the emulated output', async () => {
+    const store = storeWith({
+      runConsole: vi.fn().mockResolvedValue({ recognised: true, output: '3  o-ru-07  2.8 ms  57% loss' }),
+    });
+    render(<IncidentDetail state={baseState} store={store} nav={() => {}} route={{ params: { id: 5 } }} />);
+
+    const input = await screen.findByLabelText('diagnostic console');
+    fireEvent.change(input, { target: { value: 'traceroute o-ru' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(store.runConsole).toHaveBeenCalledWith(5, 'traceroute o-ru');
+    expect(await screen.findByText(/57% loss/)).toBeInTheDocument();
   });
 });

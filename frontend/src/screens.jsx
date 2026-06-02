@@ -271,17 +271,48 @@ function IncidentDetail({ state, store, nav, route }) {
   const [outcome, setOutcome] = React.useState(null);
   const [evidence, setEvidence] = React.useState([]);
   const [running, setRunning] = React.useState(null);
+  const [lines, setLines] = React.useState([]);
+  const [cmd, setCmd] = React.useState('');
+  const [history, setHistory] = React.useState([]);
+  const histRef = React.useRef(-1);
+  const termRef = React.useRef(null);
   React.useEffect(() => {
     let active = true;
     setEvidence([]);
+    setLines([{ t: "Diagnostic console — type 'help' to list commands." }]);
     store.getDiagnostics(inc.id).then((list) => { if (active) setEvidence(list || []); }).catch(() => {});
     return () => { active = false; };
   }, [inc.id]);
+  React.useEffect(() => {
+    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
+  }, [lines]);
   async function investigate(name) {
     setRunning(name);
     const ev = await store.runDiagnostic(inc.id, name);
     if (ev) setEvidence((prev) => (prev.some((e) => e.diagnostic === ev.diagnostic) ? prev : [...prev, ev]));
     setRunning(null);
+  }
+  async function onConsoleKey(e) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (history.length) { histRef.current = Math.max(0, (histRef.current < 0 ? history.length : histRef.current) - 1); setCmd(history[histRef.current] || ''); }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (histRef.current >= 0) { histRef.current = Math.min(history.length, histRef.current + 1); setCmd(history[histRef.current] || ''); }
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    const c = cmd.trim();
+    if (!c) return;
+    setCmd(''); histRef.current = -1;
+    setHistory((h) => [...h, c]);
+    setLines((l) => [...l, { t: '$ ' + c, you: true }]);
+    if (c.toLowerCase() === 'clear') { setLines([]); return; }
+    const res = await store.runConsole(inc.id, c);
+    if (res && res.output) setLines((l) => [...l, { t: res.output }]);
+    store.getDiagnostics(inc.id).then((list) => setEvidence(list || [])).catch(() => {});
   }
   const ranNames = new Set(evidence.map((e) => e.diagnostic));
   // Deduction board: candidates, narrowed by the (budget-limited) evidence gathered so far.
@@ -373,10 +404,26 @@ function IncidentDetail({ state, store, nav, route }) {
               ))}
             </div>
             {budgetUsed && !closed && (
-              <div style={{ color: 'var(--text-3)', fontSize: 12, marginBottom: evidence.length ? 12 : 0 }}>
+              <div style={{ color: 'var(--text-3)', fontSize: 12, marginBottom: 12 }}>
                 No tests left — make your call from the evidence above.
               </div>
             )}
+
+            {/* Console — type authentic commands and read the output (buttons above are the easy mode). */}
+            <div className="k" style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>Console</div>
+            <div ref={termRef} style={{ background: 'var(--inset)', border: '1px solid var(--hair)', borderRadius: 'var(--r)', padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-2)', maxHeight: 180, overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+              {lines.map((ln, idx) => (
+                <div key={idx} style={{ color: ln.you ? 'var(--accent)' : 'var(--text-2)' }}>{ln.t}</div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, background: 'var(--inset)', border: '1px solid var(--hair)', borderRadius: 'var(--r)', padding: '7px 11px' }}>
+              <span style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>$</span>
+              <input value={cmd} disabled={closed} onChange={(e) => setCmd(e.target.value)} onKeyDown={onConsoleKey}
+                placeholder="type a command — e.g. traceroute o-ru   (try 'help')"
+                aria-label="diagnostic console"
+                style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+            </div>
+            <div style={{ height: 12 }} />
 
             {evidence.map((e) => (
               <div key={e.diagnostic} className="kv" style={{ alignItems: 'center', gap: 8 }}>

@@ -85,6 +85,9 @@ export const Api = {
       { method: 'POST', body: { playerId, diagnostic } }),
   getDiagnostics: (sessionId, incidentId, playerId) =>
     request(`/sessions/${sessionId}/incidents/${incidentId}/diagnostics?playerId=${playerId}`),
+  runConsole: (sessionId, incidentId, playerId, command) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}/console`,
+      { method: 'POST', body: { playerId, command } }),
 
   // --- scores ---
   getScoreboard: (sessionId) => request(`/sessions/${sessionId}/scores`),
