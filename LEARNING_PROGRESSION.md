@@ -120,3 +120,63 @@ see buttons or must use the console. This delivers the teaching goal without bre
    is the real skill payoff but the most work and the hardest for players.)
 5. **Build order** — start with phase 1 (progression persistence) and go in order, or prototype the
    teach-modal (phase 2) first to feel the UX?
+
+---
+
+# Phase 6 — Training mode + adaptive difficulty (detailed design)
+
+> Phases 1–5 are built (progression, learn-on-use + console fixes, arg-aware console, field manual).
+> This is the last piece: a **solo Training mode** where difficulty scales with the player's tier,
+> per the agreed fork (C + A). Head-to-head matches are unchanged.
+
+### What it is
+A single-player session for the curriculum. No opponent, so adaptive difficulty is fair. It starts
+gentle for a Trainee and gets busier/harsher as the player's tier rises — "starts slow, speeds up as
+you learn." Competitive head-to-head stays exactly as it is today.
+
+### Model
+- **`GameSession.mode`** — `HEAD_TO_HEAD` (default, today's behaviour) or `TRAINING`.
+- **Create training** — `POST /api/sessions/training {userId, durationSeconds}`: makes a `TRAINING`
+  session, adds the one player, and **activates it immediately** (no second player, no ready-check).
+- **Difficulty from tier** — at creation the session's `difficulty` is set from the player's current
+  tier: **Trainee→EASY (3 cells), Operator→MEDIUM (6), Engineer→HARD (9)**. The simulator already
+  ramps incident volume + severity by difficulty + match time, so this reuses what we have — more
+  cells = more incidents, HARD = HIGH-severity from the start.
+- **Leaving / ending** — leaving just ends *your* training (no forfeit-vs-opponent); it ends on the
+  timer like any session. No competitive high-score entry — training is practice (the end screen
+  shows your score + tier).
+
+### Simulator
+One small change: it currently only seeds sessions that have **2** players (`len(players) < 2: return`).
+Relax that to **≥1** so it also seeds/ticks training sessions. Everything else (tower count, refill,
+severity pool) already keys off `difficulty`, so no tier coupling is needed in the simulator.
+
+### Why difficulty-at-creation (not live per-tick)
+The simplest faithful model: each training session is sized to your **current** tier, and you level
+up **across** sessions (learn more → next training is harder). A *live* within-session ramp (re-reading
+your tier every tick as you learn mid-match) is finer-grained but needs the simulator to query each
+player's tier every tick — more coupling for little gain. Recommend creation-time for the MVP; live
+ramp can come later if it's wanted.
+
+### Touch points
+- Backend: `GameSession.mode`; `SessionService.createTrainingSession`; `SessionResponse.mode`;
+  `/api/sessions/training`. Leave/expiry already handle a session ending.
+- Simulator: relax the 2-player guard to ≥1.
+- Frontend: a **Training** entry in the lobby → create a training session → drop into the solo game;
+  a solo-aware end screen (no opponent).
+- Tests: backend (training activates immediately with one player at the tier's difficulty; leaving
+  ends it) + controller + integration; simulator (n/a — guard isn't unit-covered); frontend (lobby
+  training start, solo end screen).
+
+### Build order (each its own commit, tested)
+1. Backend: `mode` + `createTrainingSession` + endpoint + `SessionResponse.mode` + tests.
+2. Simulator: seed sessions with ≥1 player.
+3. Frontend: lobby Training start + solo end-screen handling + tests.
+4. Live verify: start training as Trainee (EASY) vs after reaching Operator (MEDIUM).
+
+### Open decisions
+1. **Difficulty granularity** — creation-time from tier (recommended), or live per-tick ramp?
+2. **Training scoring** — personal score only, no competitive high-score entry (recommended), or a
+   separate training leaderboard / personal best?
+3. **Tier→difficulty mapping** — Trainee/Operator/Engineer → EASY/MEDIUM/HARD as above, or a
+   different curve?
