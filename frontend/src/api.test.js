@@ -60,6 +60,11 @@ describe('Api client', () => {
       '/api/sessions/1/incidents/3/diagnostics?playerId=2', expect.anything());
   });
 
+  it('getUserSkills fetches the player progression', async () => {
+    await Api.getUserSkills(7);
+    expect(fetch).toHaveBeenCalledWith('/api/users/7/skills', expect.anything());
+  });
+
   it('runConsole POSTs the command to the incident', async () => {
     await Api.runConsole(1, 3, 2, 'traceroute o-ru');
     const [url, opts] = fetch.mock.calls[0];

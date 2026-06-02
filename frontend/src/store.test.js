@@ -9,6 +9,7 @@ vi.mock('./api.js', () => ({
     getIncidents: vi.fn(),
     getScoreEvents: vi.fn(),
     getActions: vi.fn(),
+    getUserSkills: vi.fn(),
     submitAction: vi.fn(),
     runDiagnostic: vi.fn(),
     getDiagnostics: vi.fn(),
@@ -71,6 +72,7 @@ describe('createBackendStore', () => {
       { id: 1, playerId: 2, points: 140, reason: 'Cell overload / CORRECT', createdAt: '2026-06-01T10:00:00Z' },
     ]);
     Api.getActions.mockResolvedValue([{ id: 4, actionName: 'REBALANCE_TRAFFIC', description: 'Move load' }]);
+    Api.getUserSkills.mockResolvedValue({ learnedActions: ['REBALANCE_TRAFFIC'], learnedDiagnostics: [], tier: 'TRAINEE' });
   });
 
   afterEach(() => store?.stop());
@@ -92,6 +94,9 @@ describe('createBackendStore', () => {
     const me = s.players.find((p) => p.you);
     expect(me.id).toBe(2);
     expect(me.score).toBe(140);
+
+    expect(s.learnedActions).toEqual(['REBALANCE_TRAFFIC']);  // progression folded into state
+    expect(s.tier).toBe('TRAINEE');
   });
 
   it('applyAction submits to the backend with numeric ids and returns the outcome', async () => {

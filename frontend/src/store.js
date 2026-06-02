@@ -102,6 +102,7 @@ function emptyState(conn) {
     endsAt: conn.session.endedAt ? Date.parse(conn.session.endedAt) : null,
     forfeitedBy: conn.session.forfeitedByPlayerId ?? null,
     config: { difficulty: 'normal', simSpeed: 1 },
+    learnedActions: [], learnedDiagnostics: [], tier: 'TRAINEE',
     version: 0,
   };
 }
@@ -109,12 +110,13 @@ function emptyState(conn) {
 export function createBackendStore(conn) {
   const sessionId = conn.session.id;
   const playerId = conn.playerId;
+  const userId = conn.user.id;
   let actions = {};          // backend id -> { id, name, desc, icon }
   let state = emptyState(conn);
   const subs = new Set();
   const notify = () => subs.forEach((f) => f(state));
 
-  function buildState(session, players, cells, incidents, events) {
+  function buildState(session, players, cells, incidents, events, skills) {
     const sorted = [...cells].sort((a, b) => a.cellName.localeCompare(b.cellName));
     const nameById = {};
     const positions = scatterPositions(sorted.map((c) => c.cellName), session.sessionCode || String(session.id));
@@ -190,20 +192,24 @@ export function createBackendStore(conn) {
       endsAt: session.endedAt ? Date.parse(session.endedAt) : null,
       forfeitedBy: session.forfeitedByPlayerId ?? null,
       config: state.config,
+      learnedActions: skills?.learnedActions || [],
+      learnedDiagnostics: skills?.learnedDiagnostics || [],
+      tier: skills?.tier || 'TRAINEE',
       version: state.version + 1,
     };
   }
 
   async function refresh() {
     try {
-      const [session, players, cells, incidents, events] = await Promise.all([
+      const [session, players, cells, incidents, events, skills] = await Promise.all([
         Api.getSession(sessionId),
         Api.getPlayers(sessionId),
         Api.getCells(sessionId, playerId),
         Api.getIncidents(sessionId, playerId),
         Api.getScoreEvents(sessionId),
+        Api.getUserSkills(userId),
       ]);
-      state = buildState(session, players, cells, incidents, events);
+      state = buildState(session, players, cells, incidents, events, skills);
       notify();
     } catch { /* transient — keep last good snapshot */ }
   }

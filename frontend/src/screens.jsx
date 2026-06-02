@@ -269,8 +269,10 @@ function IncidentDetail({ state, store, nav, route }) {
   const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
   const [flash, setFlash] = React.useState(null);
   const [outcome, setOutcome] = React.useState(null);
+  const [lesson, setLesson] = React.useState(null);
   const [evidence, setEvidence] = React.useState([]);
   const [running, setRunning] = React.useState(null);
+  const learnedActions = new Set(state.learnedActions || []);
   const [lines, setLines] = React.useState([]);
   const [cmd, setCmd] = React.useState('');
   const [history, setHistory] = React.useState([]);
@@ -325,7 +327,10 @@ function IncidentDetail({ state, store, nav, route }) {
   async function apply(aid) {
     setFlash(aid);
     const res = await store.applyAction(inc.id, aid);
-    if (res) setOutcome(res);
+    if (res) {
+      setOutcome(res);
+      if (res.justLearned) setLesson(res); // first time using this action -> teach the CLI
+    }
   }
   const OUTCOME = {
     SUCCESS: { cls: 'good', icon: 'check', text: 'Correct fix — incident resolved.' },
@@ -463,21 +468,46 @@ function IncidentDetail({ state, store, nav, route }) {
           <div>
             {catalog.map((aid) => {
               const a = store.ACTIONS[aid];
-              const rec = false; // no auto-recommend — the player decides which action to apply
+              const learned = learnedActions.has(a.actionName); // learned -> button retires, use the console
               return (
                 <div key={aid} className={'action-row' + (flash === aid ? ' flash' : '')}>
                   <span className="action-ic"><Icon name={a.icon} size={17} /></span>
                   <div style={{ flex: 1 }}>
-                    <div className="at">{a.name}{rec && <span className="pts-pill">★ recommended</span>}</div>
-                    <div className="ad">{a.desc}</div>
+                    <div className="at">{a.name}{learned && <span className="pts-pill">✓ learned</span>}</div>
+                    <div className="ad">{learned ? 'You know this one — apply it from the console.' : a.desc}</div>
                   </div>
-                  <button className={'btn' + (rec && !closed ? ' primary' : '')} disabled={closed} onClick={() => apply(aid)}>Apply</button>
+                  <button className="btn" disabled={closed || learned} onClick={() => apply(aid)}>Apply</button>
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {lesson && (
+        <div onClick={() => setLesson(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'grid', placeItems: 'center', zIndex: 50 }}>
+          <div onClick={(e) => e.stopPropagation()} className="panel panel-pad" style={{ maxWidth: 520, margin: 16 }}>
+            <h2 style={{ marginBottom: 8 }}>Command learned</h2>
+            <div style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 14 }}>
+              From now on you apply this fix in the console. Here's how an engineer does it:
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginBottom: 12 }}>
+              <div style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>Fix</div>
+              <div style={{ color: 'var(--accent)' }}>$ {lesson.actionCommand}</div>
+            </div>
+            {lesson.diagnoseCommands && lesson.diagnoseCommands.length > 0 && (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginBottom: 16 }}>
+                <div style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>Diagnose</div>
+                {lesson.diagnoseCommands.map((c, i) => (
+                  <div key={i} style={{ color: 'var(--text-2)' }}>$ {c}</div>
+                ))}
+              </div>
+            )}
+            <button className="btn primary" onClick={() => setLesson(null)}>Got it</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

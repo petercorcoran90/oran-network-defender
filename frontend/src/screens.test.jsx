@@ -137,4 +137,26 @@ describe('IncidentDetail action submission', () => {
     expect(store.runConsole).toHaveBeenCalledWith(5, 'traceroute o-ru');
     expect(await screen.findByText(/57% loss/)).toBeInTheDocument();
   });
+
+  it('shows the teaching modal the first time an action is used', async () => {
+    const store = storeWith({
+      applyAction: vi.fn().mockResolvedValue({
+        result: 'SUCCESS', pointsAwarded: 140, justLearned: true,
+        actionCommand: 'rrmctl rebalance --cell o-ru-07', diagnoseCommands: ['kubectl logs deploy/traffic-steering'],
+      }),
+    });
+    render(<IncidentDetail state={baseState} store={store} nav={() => {}} route={{ params: { id: 5 } }} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    expect(await screen.findByText('Command learned')).toBeInTheDocument();
+    expect(screen.getByText(/rrmctl rebalance --cell o-ru-07/)).toBeInTheDocument();
+  });
+
+  it('retires a learned action button — you apply it from the console', () => {
+    const learnedState = { ...baseState, learnedActions: ['REBALANCE_TRAFFIC'] };
+    render(<IncidentDetail state={learnedState} store={storeWith()} nav={() => {}} route={{ params: { id: 5 } }} />);
+
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  });
 });
