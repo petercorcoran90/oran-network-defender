@@ -2,6 +2,7 @@ package com.oran.defender.controller;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,12 +10,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.Action;
+import com.oran.defender.model.DiagnosticRun;
 import com.oran.defender.model.Incident;
 import com.oran.defender.model.Player;
 import com.oran.defender.model.PlayerAction;
 import com.oran.defender.model.PlayerAction.ActionResult;
 import com.oran.defender.service.IncidentService;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -133,5 +136,53 @@ class IncidentControllerTest {
                 .andExpect(jsonPath("$.trace").doesNotExist())
                 .andExpect(jsonPath("$.exception").doesNotExist())
                 .andExpect(jsonPath("$.path").doesNotExist());
+    }
+
+    // ---- diagnostics (investigation) ----
+
+    private static final String DIAG_URL = "/api/sessions/1/incidents/3/diagnostics";
+
+    private DiagnosticRun sampleRun() {
+        DiagnosticRun run = new DiagnosticRun();
+        run.setId(9L);
+        run.setDiagnosticType("TRACE_TRANSPORT");
+        run.setResult("CONFIRMS");
+        run.setImplicated("TRANSPORT_LINK_FAULT");
+        return run;
+    }
+
+    @Test
+    @DisplayName("POST diagnostics -> 200 with the evidence (finding, never the raw root cause)")
+    void runDiagnostic() throws Exception {
+        given(incidentService.runDiagnostic(1L, 3L, 2L, "TRACE_TRANSPORT")).willReturn(sampleRun());
+
+        mvc.perform(post(DIAG_URL).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2,\"diagnostic\":\"TRACE_TRANSPORT\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostic").value("TRACE_TRANSPORT"))
+                .andExpect(jsonPath("$.label").value("Trace transport link"))
+                .andExpect(jsonPath("$.result").value("CONFIRMS"))
+                .andExpect(jsonPath("$.finding").value("Transport link fault — confirmed."));
+    }
+
+    @Test
+    @DisplayName("POST diagnostics without a diagnostic -> 400")
+    void runDiagnosticMissingField() throws Exception {
+        mvc.perform(post(DIAG_URL).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(incidentService);
+    }
+
+    @Test
+    @DisplayName("GET diagnostics lists the evidence gathered so far")
+    void listDiagnostics() throws Exception {
+        given(incidentService.getDiagnostics(1L, 3L, 2L)).willReturn(List.of(sampleRun()));
+
+        mvc.perform(get(DIAG_URL).param("playerId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].diagnostic").value("TRACE_TRANSPORT"))
+                .andExpect(jsonPath("$[0].result").value("CONFIRMS"));
     }
 }

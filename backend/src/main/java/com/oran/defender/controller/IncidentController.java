@@ -1,9 +1,11 @@
 package com.oran.defender.controller;
 
+import com.oran.defender.dto.DiagnosticResponse;
 import com.oran.defender.dto.IncidentResponse;
 import com.oran.defender.dto.PlayerActionResponse;
 import com.oran.defender.service.IncidentService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +22,7 @@ public class IncidentController {
     }
 
     record SubmitActionRequest(@NotNull Long playerId, @NotNull Long actionId) {}
+    record RunDiagnosticRequest(@NotNull Long playerId, @NotBlank String diagnostic) {}
 
     // Get incidents for a session — pass ?playerId= for one player's incidents,
     // and/or ?status= to filter by OPEN, RESOLVED, FAILED
@@ -52,5 +55,23 @@ public class IncidentController {
                                                           @PathVariable Long incidentId) {
         return incidentService.getActionsForIncident(sessionId, incidentId).stream()
                 .map(PlayerActionResponse::from).toList();
+    }
+
+    // Player runs a diagnostic on an incident to gather evidence (investigation)
+    @PostMapping("/{incidentId}/diagnostics")
+    public DiagnosticResponse runDiagnostic(@PathVariable Long sessionId,
+                                            @PathVariable Long incidentId,
+                                            @Valid @RequestBody RunDiagnosticRequest req) {
+        return DiagnosticResponse.from(
+                incidentService.runDiagnostic(sessionId, incidentId, req.playerId(), req.diagnostic()));
+    }
+
+    // Get the evidence a player has gathered on an incident so far
+    @GetMapping("/{incidentId}/diagnostics")
+    public List<DiagnosticResponse> getDiagnostics(@PathVariable Long sessionId,
+                                                   @PathVariable Long incidentId,
+                                                   @RequestParam Long playerId) {
+        return incidentService.getDiagnostics(sessionId, incidentId, playerId).stream()
+                .map(DiagnosticResponse::from).toList();
     }
 }

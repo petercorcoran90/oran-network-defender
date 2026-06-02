@@ -2,13 +2,18 @@ package com.oran.defender.service;
 
 import com.oran.defender.dto.IncidentResponse;
 import com.oran.defender.engine.ActionType;
+import com.oran.defender.engine.DiagnosticEvaluator;
+import com.oran.defender.engine.DiagnosticType;
 import com.oran.defender.engine.EvaluationResult;
+import com.oran.defender.engine.Evidence;
 import com.oran.defender.engine.IncidentEvaluator;
 import com.oran.defender.engine.RootCause;
 import com.oran.defender.engine.ScoreCalculator;
+import com.oran.defender.engine.SymptomGroup;
 import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.Action;
+import com.oran.defender.model.DiagnosticRun;
 import com.oran.defender.model.GameSession.SessionStatus;
 import com.oran.defender.model.GameSession;
 import com.oran.defender.model.Incident;
@@ -20,6 +25,7 @@ import com.oran.defender.model.Player;
 import com.oran.defender.model.PlayerAction;
 import com.oran.defender.model.PlayerAction.ActionResult;
 import com.oran.defender.repository.ActionRepository;
+import com.oran.defender.repository.DiagnosticRunRepository;
 import com.oran.defender.repository.IncidentRepository;
 import com.oran.defender.repository.NetworkCellRepository;
 import com.oran.defender.repository.PlayerActionRepository;
@@ -44,6 +50,12 @@ public class IncidentService {
     private final IncidentEvaluator incidentEvaluator;
     private final ScoreCalculator scoreCalculator;
     private final ScoreService scoreService;
+    private final DiagnosticEvaluator diagnosticEvaluator;
+    private final DiagnosticRunRepository diagnosticRunRepository;
+
+    // Each diagnostic a player runs costs this much "time" against the response-time bonus, so
+    // investigating trades a little speed for certainty (it never costs points directly).
+    static final int DIAGNOSTIC_TIME_PENALTY_SECONDS = 10;
 
     public IncidentService(IncidentRepository incidentRepository,
                            PlayerRepository playerRepository,
@@ -52,7 +64,9 @@ public class IncidentService {
                            NetworkCellRepository cellRepository,
                            IncidentEvaluator incidentEvaluator,
                            ScoreCalculator scoreCalculator,
-                           ScoreService scoreService) {
+                           ScoreService scoreService,
+                           DiagnosticEvaluator diagnosticEvaluator,
+                           DiagnosticRunRepository diagnosticRunRepository) {
         this.incidentRepository = incidentRepository;
         this.playerRepository = playerRepository;
         this.actionRepository = actionRepository;
@@ -61,6 +75,8 @@ public class IncidentService {
         this.incidentEvaluator = incidentEvaluator;
         this.scoreCalculator = scoreCalculator;
         this.scoreService = scoreService;
+        this.diagnosticEvaluator = diagnosticEvaluator;
+        this.diagnosticRunRepository = diagnosticRunRepository;
     }
 
     @Transactional(readOnly = true)
@@ -118,7 +134,11 @@ public class IncidentService {
         // Hand off to the pure engine: hidden root cause + chosen action -> verdict + points.
         RootCause rootCause = RootCause.valueOf(incident.getRootCause());
         ActionType actionType = ActionType.valueOf(action.getActionName());
-        long responseSeconds = Duration.between(incident.getCreatedAt(), Instant.now()).getSeconds();
+        // Wall-clock time plus the time "spent" investigating — each diagnostic this player ran on
+        // this incident erodes the response-time bonus (the cost of gathering certainty).
+        long diagnostics = diagnosticRunRepository.countByIncidentIdAndPlayerId(incidentId, playerId);
+        long responseSeconds = Duration.between(incident.getCreatedAt(), Instant.now()).getSeconds()
+                + diagnostics * DIAGNOSTIC_TIME_PENALTY_SECONDS;
         EvaluationResult verdict = incidentEvaluator.evaluate(rootCause, actionType);
         int points = scoreCalculator.pointsFor(verdict, responseSeconds, actionType);
 
@@ -141,6 +161,65 @@ public class IncidentService {
     public List<PlayerAction> getActionsForIncident(Long sessionId, Long incidentId) {
         loadIncidentInSession(sessionId, incidentId); // 404 if it isn't in this session
         return playerActionRepository.findByIncidentId(incidentId);
+    }
+
+    /**
+     * Runs a diagnostic against the incident's hidden root cause and records the evidence. Same
+     * ownership/state guards as {@link #submitAction}. Idempotent: re-running a diagnostic returns
+     * the already-recorded evidence (so the player isn't charged time twice). The diagnostic must
+     * be one of those relevant to the incident's symptom group.
+     */
+    @Transactional
+    public DiagnosticRun runDiagnostic(Long sessionId, Long incidentId, Long playerId, String diagnosticName) {
+        Incident incident = loadIncidentInSession(sessionId, incidentId);
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new NotFoundException("Player not found"));
+        if (!player.getGameSession().getId().equals(sessionId)) {
+            throw new InvalidActionException("Player is not part of this session");
+        }
+        if (!incident.getPlayer().getId().equals(playerId)) {
+            throw new InvalidActionException("Incident does not belong to this player");
+        }
+        if (incident.getGameSession().getStatus() != SessionStatus.ACTIVE) {
+            throw new InvalidActionException("Session is not active");
+        }
+        if (incident.getStatus() != IncidentStatus.OPEN) {
+            throw new InvalidActionException("Incident is already resolved");
+        }
+
+        DiagnosticType diagnostic = parseDiagnostic(diagnosticName);
+        RootCause rootCause = RootCause.valueOf(incident.getRootCause());
+        if (!SymptomGroup.of(rootCause).diagnostics().contains(diagnostic)) {
+            throw new InvalidActionException("Diagnostic does not apply to this incident");
+        }
+
+        // Idempotent: if this diagnostic was already run, return the existing evidence.
+        return diagnosticRunRepository
+                .findByIncidentIdAndPlayerIdAndDiagnosticType(incidentId, playerId, diagnostic.name())
+                .orElseGet(() -> {
+                    Evidence evidence = diagnosticEvaluator.diagnose(rootCause, diagnostic);
+                    DiagnosticRun run = new DiagnosticRun();
+                    run.setIncident(incident);
+                    run.setPlayer(player);
+                    run.setDiagnosticType(diagnostic.name());
+                    run.setResult(evidence.result().name());
+                    run.setImplicated(evidence.implicated().name());
+                    return diagnosticRunRepository.save(run);
+                });
+    }
+
+    @Transactional(readOnly = true)
+    public List<DiagnosticRun> getDiagnostics(Long sessionId, Long incidentId, Long playerId) {
+        loadIncidentInSession(sessionId, incidentId); // 404 if it isn't in this session
+        return diagnosticRunRepository.findByIncidentIdAndPlayerId(incidentId, playerId);
+    }
+
+    private DiagnosticType parseDiagnostic(String name) {
+        try {
+            return DiagnosticType.valueOf(name);
+        } catch (IllegalArgumentException | NullPointerException ex) {
+            throw new InvalidActionException("Unknown diagnostic: " + name);
+        }
     }
 
     private Incident loadIncidentInSession(Long sessionId, Long incidentId) {
