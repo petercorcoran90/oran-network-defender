@@ -49,6 +49,10 @@ describe('IncidentDetail action submission', () => {
       detectedAt: Date.now(), description: 'Ambiguous congestion',
       symptomGroup: 'Congestion',
       diagnostics: [{ name: 'INSPECT_AUTOMATION', label: 'Inspect automation logs' }],
+      candidates: [
+        { cause: 'CELL_OVERLOAD', label: 'Cell overload', action: 'REBALANCE_TRAFFIC' },
+        { cause: 'ROGUE_AUTOMATION', label: 'Rogue automation', action: 'DISABLE_AUTOMATION' },
+      ],
       metrics: { signalQuality: 40, userLoad: 95, latency: 120, packetLoss: 8 }, rec: [],
     }],
     cells: [{ id: 'Cell-A', health: 25 }],
@@ -56,7 +60,7 @@ describe('IncidentDetail action submission', () => {
 
   function storeWith(extra = {}) {
     return {
-      ACTIONS: { 4: { id: 4, name: 'Rebalance Traffic', desc: 'Move load to neighbours', icon: 'shuffle' } },
+      ACTIONS: { 4: { id: 4, actionName: 'REBALANCE_TRAFFIC', name: 'Rebalance Traffic', desc: 'Move load', icon: 'shuffle' } },
       applyAction: vi.fn().mockResolvedValue({ result: 'SUCCESS', pointsAwarded: 140 }),
       getDiagnostics: vi.fn().mockResolvedValue([]),
       runDiagnostic: vi.fn(),
@@ -98,5 +102,21 @@ describe('IncidentDetail action submission', () => {
 
     expect(store.runDiagnostic).toHaveBeenCalledWith(5, 'INSPECT_AUTOMATION');
     expect(await screen.findByText(/Rogue automation — ruled out/)).toBeInTheDocument();
+  });
+
+  it('eliminating a candidate deduces the survivor and recommends its fix', async () => {
+    const store = storeWith({
+      runDiagnostic: vi.fn().mockResolvedValue({
+        diagnostic: 'INSPECT_AUTOMATION', label: 'Inspect automation logs',
+        result: 'RULES_OUT', implicated: 'ROGUE_AUTOMATION', finding: 'Rogue automation — ruled out.',
+      }),
+    });
+    render(<IncidentDetail state={baseState} store={store} nav={() => {}} route={{ params: { id: 5 } }} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Inspect automation logs/ }));
+
+    // Rogue automation ruled out -> Cell overload is the survivor -> apply Rebalance Traffic.
+    expect(await screen.findByText(/Deduced — apply/)).toBeInTheDocument();
+    expect(screen.getByText('Rebalance Traffic', { selector: 'b' })).toBeInTheDocument();
   });
 });

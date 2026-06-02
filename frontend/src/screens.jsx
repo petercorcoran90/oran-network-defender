@@ -284,6 +284,16 @@ function IncidentDetail({ state, store, nav, route }) {
     setRunning(null);
   }
   const ranNames = new Set(evidence.map((e) => e.diagnostic));
+  // Deduction board: candidates, narrowed by the evidence gathered so far.
+  const candidates = inc.candidates || [];
+  const confirmedEv = evidence.find((e) => e.result === 'CONFIRMS');
+  const eliminated = new Set(evidence.filter((e) => e.result === 'RULES_OUT').map((e) => e.implicated));
+  const surviving = confirmedEv
+    ? candidates.filter((c) => c.cause === confirmedEv.implicated)
+    : candidates.filter((c) => !eliminated.has(c.cause));
+  const actByName = Object.fromEntries(Object.values(store.ACTIONS).map((a) => [a.actionName, a]));
+  const deducedActionName = surviving.length === 1 ? surviving[0].action : null;
+  const recAid = deducedActionName && actByName[deducedActionName] ? String(actByName[deducedActionName].id) : null;
   async function apply(aid) {
     setFlash(aid);
     const res = await store.applyAction(inc.id, aid);
@@ -333,9 +343,35 @@ function IncidentDetail({ state, store, nav, route }) {
             <span className="corner">{inc.symptomGroup || 'Symptom'} · {evidence.length}/{inc.diagnostics.length} run</span>
           </div>
           <div className="panel-pad">
-            <div style={{ color: 'var(--text-3)', fontSize: 12.5, marginBottom: 10 }}>
-              The symptoms are ambiguous — run diagnostics to narrow down the cause before you act.
+            <div style={{ color: 'var(--text-3)', fontSize: 12.5, marginBottom: 12 }}>
+              The symptoms are ambiguous — run diagnostics to rule causes out, then apply the fix for the one that's left.
             </div>
+
+            {/* Deduction board: each possible cause + its fix, narrowed by the evidence. */}
+            <div style={{ marginBottom: 12 }}>
+              {candidates.map((c) => {
+                const out = !confirmedEv && eliminated.has(c.cause);
+                const isAnswer = (confirmedEv && c.cause === confirmedEv.implicated)
+                  || (!confirmedEv && surviving.length === 1 && surviving[0].cause === c.cause);
+                return (
+                  <div key={c.cause} className="kv" style={{ alignItems: 'center', gap: 8, opacity: out ? 0.5 : 1 }}>
+                    <span className={'tag ' + (isAnswer ? 'good' : out ? 'muted' : 'warn')} style={{ minWidth: 72, textAlign: 'center' }}>
+                      {isAnswer ? 'likely' : out ? 'ruled out' : 'possible'}
+                    </span>
+                    <span style={{ textDecoration: out ? 'line-through' : 'none', color: 'var(--text-2)', fontSize: 13 }}>
+                      {c.label} <span style={{ color: 'var(--text-3)' }}>→ fix: {actByName[c.action]?.name || c.action}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {deducedActionName && !closed && (
+              <div style={{ color: 'var(--good)', fontSize: 12.5, marginBottom: 12 }}>
+                Deduced — apply <b>{actByName[deducedActionName]?.name || deducedActionName}</b> (highlighted in Available Actions).
+              </div>
+            )}
+
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: evidence.length ? 12 : 0 }}>
               {inc.diagnostics.map((d) => (
                 <button key={d.name} className="btn" disabled={closed || ranNames.has(d.name) || running === d.name}
@@ -344,6 +380,7 @@ function IncidentDetail({ state, store, nav, route }) {
                 </button>
               ))}
             </div>
+
             {evidence.map((e) => (
               <div key={e.diagnostic} className="kv" style={{ alignItems: 'center', gap: 8 }}>
                 <span className={'tag ' + (e.result === 'CONFIRMS' ? 'good' : 'muted')}>
@@ -382,7 +419,7 @@ function IncidentDetail({ state, store, nav, route }) {
           <div>
             {catalog.map((aid) => {
               const a = store.ACTIONS[aid];
-              const rec = inc.rec.includes(aid);
+              const rec = recAid != null && aid === recAid; // ★ once investigation points to it
               return (
                 <div key={aid} className={'action-row' + (flash === aid ? ' flash' : '')}>
                   <span className="action-ic"><Icon name={a.icon} size={17} /></span>

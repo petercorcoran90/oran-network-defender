@@ -162,6 +162,7 @@ class IncidentControllerTest {
                 .andExpect(jsonPath("$.diagnostic").value("TRACE_TRANSPORT"))
                 .andExpect(jsonPath("$.label").value("Trace transport link"))
                 .andExpect(jsonPath("$.result").value("CONFIRMS"))
+                .andExpect(jsonPath("$.implicated").value("TRANSPORT_LINK_FAULT"))
                 .andExpect(jsonPath("$.finding").value("Transport link fault — confirmed."));
     }
 

@@ -6,6 +6,7 @@ import com.oran.defender.engine.SymptomGroup;
 import com.oran.defender.model.Incident;
 
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -25,20 +26,30 @@ public record IncidentResponse(
         String description,
         String symptomGroup,
         List<DiagnosticInfo> availableDiagnostics,
+        List<Candidate> candidates,
         Instant createdAt,
         Instant resolvedAt
 ) {
     /** A diagnostic the player can run, for the UI (name to submit + human label). */
     public record DiagnosticInfo(String name, String label) {}
 
+    /** A possible cause for this symptom group, with the action that fixes it. Which one is real
+     *  stays hidden — the player deduces it by running diagnostics. */
+    public record Candidate(String cause, String label, String action) {}
+
     public static IncidentResponse from(Incident incident) {
         String groupLabel = null;
         List<DiagnosticInfo> diagnostics = List.of();
+        List<Candidate> candidates = List.of();
         SymptomGroup group = symptomGroupOf(incident.getRootCause());
         if (group != null) {
             groupLabel = group.label();
             diagnostics = group.diagnostics().stream()
                     .map(d -> new DiagnosticInfo(d.name(), d.label()))
+                    .toList();
+            candidates = group.candidates().stream()
+                    .map(rc -> new Candidate(rc.name(), rc.label(), rc.correctAction().name()))
+                    .sorted(Comparator.comparing(Candidate::label))
                     .toList();
         }
         return new IncidentResponse(
@@ -52,6 +63,7 @@ public record IncidentResponse(
                 incident.getDescription(),
                 groupLabel,
                 diagnostics,
+                candidates,
                 incident.getCreatedAt(),
                 incident.getResolvedAt()
         );

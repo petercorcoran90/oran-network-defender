@@ -12,12 +12,14 @@ public record DiagnosticResponse(
         String diagnostic,
         String label,
         String result,
+        String implicated,
         String finding
 ) {
     public static DiagnosticResponse from(DiagnosticRun run) {
         DiagnosticType type = DiagnosticType.valueOf(run.getDiagnosticType());
         boolean confirmed = EvidenceResult.valueOf(run.getResult()) == EvidenceResult.CONFIRMS;
         String finding = type.hypothesis() + (confirmed ? " — confirmed." : " — ruled out.");
-        return new DiagnosticResponse(run.getDiagnosticType(), type.label(), run.getResult(), finding);
+        return new DiagnosticResponse(
+                run.getDiagnosticType(), type.label(), run.getResult(), run.getImplicated(), finding);
     }
 }

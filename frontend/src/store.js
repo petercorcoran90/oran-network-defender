@@ -150,6 +150,7 @@ export function createBackendStore(conn) {
         description: inc.description,
         symptomGroup: inc.symptomGroup || null,
         diagnostics: inc.availableDiagnostics || [], // [{ name, label }] — what to investigate with
+        candidates: inc.candidates || [],            // [{ cause, label, action }] — the deduction board
         metrics: cell
           ? { signalQuality: Math.round(cell.signalQuality), userLoad: Math.round(cell.userLoad), latency: Math.round(cell.latency), packetLoss: Math.round(cell.packetLoss) }
           : { signalQuality: 0, userLoad: 0, latency: 0, packetLoss: 0 },
@@ -238,7 +239,7 @@ export function createBackendStore(conn) {
 
   // load the action catalog once, then begin polling
   Api.getActions().then((list) => {
-    list.forEach((a) => { actions[a.id] = { id: a.id, name: prettyName(a.actionName), desc: a.description, icon: ACTION_ICON[a.actionName] || 'actions' }; });
+    list.forEach((a) => { actions[a.id] = { id: a.id, actionName: a.actionName, name: prettyName(a.actionName), desc: a.description, icon: ACTION_ICON[a.actionName] || 'actions' }; });
     notify();
   }).catch(() => {});
   refresh();
