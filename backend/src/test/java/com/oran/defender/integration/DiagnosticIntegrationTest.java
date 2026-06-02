@@ -175,13 +175,39 @@ class DiagnosticIntegrationTest extends AbstractMySqlIntegrationTest {
     // ---- console ----
 
     @Test
-    @DisplayName("console: help lists the incident's authentic commands")
+    @DisplayName("console: help lists command NAMES only — never the arguments")
     void consoleHelp() {
         Scene sc = scene("DIA008", "dia-g", RootCause.TRANSPORT_LINK_FAULT, "Cell-A");
         ConsoleResponse r = incidentService.runConsoleCommand(
                 sc.session().getId(), sc.incident().getId(), sc.player().getId(), "help");
         assertThat(r.recognised()).isTrue();
-        assertThat(r.output()).contains("traceroute o-ru").contains("netconf get-config");
+        assertThat(r.output()).contains("traceroute").contains("netconf get-config");
+        assertThat(r.output()).doesNotContain("o-ru");   // arguments are not revealed by help
+    }
+
+    @Test
+    @DisplayName("console: a command needs its arguments, and a wrong attempt points to man (no answer)")
+    void consoleRequiresArguments() {
+        Scene sc = scene("DIA014", "con-args", RootCause.TRANSPORT_LINK_FAULT, "Cell-A");
+        Long s = sc.session().getId(), i = sc.incident().getId(), p = sc.player().getId();
+
+        ConsoleResponse missing = incidentService.runConsoleCommand(s, i, p, "traceroute"); // no node
+        assertThat(missing.output()).contains("man traceroute");
+        assertThat(missing.output()).doesNotContain("o-ru");                 // doesn't hand over the args
+        assertThat(diagnostics.countByIncidentIdAndPlayerId(i, p)).isZero(); // not run / not charged
+
+        ConsoleResponse ok = incidentService.runConsoleCommand(s, i, p, "traceroute o-ru-07");
+        assertThat(ok.output()).contains("loss");
+        assertThat(diagnostics.countByIncidentIdAndPlayerId(i, p)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("console: man reveals a command's arguments (the lookup path)")
+    void consoleManRevealsArguments() {
+        Scene sc = scene("DIA015", "con-man", RootCause.TRANSPORT_LINK_FAULT, "Cell-A");
+        ConsoleResponse man = incidentService.runConsoleCommand(
+                sc.session().getId(), sc.incident().getId(), sc.player().getId(), "man traceroute");
+        assertThat(man.output()).contains("traceroute o-ru");
     }
 
     @Test

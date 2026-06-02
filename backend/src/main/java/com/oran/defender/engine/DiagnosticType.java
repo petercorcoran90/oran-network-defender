@@ -12,30 +12,37 @@ package com.oran.defender.engine;
  */
 public enum DiagnosticType {
     TRACE_TRANSPORT("Trace transport link", "Transport link fault",
-            "traceroute o-ru", "traceroute", RootCause.TRANSPORT_LINK_FAULT),
+            "traceroute o-ru", "traceroute", "o-ru", RootCause.TRANSPORT_LINK_FAULT),
     CHECK_NEIGHBOUR_CONFIG("Check neighbour configuration", "Recent neighbour config change",
-            "netconf get-config o-du", "netconf get-config", RootCause.NEIGHBOUR_CONFIG_CHANGE),
+            "netconf get-config o-du", "netconf get-config", "o-du", RootCause.NEIGHBOUR_CONFIG_CHANGE),
     CHECK_UPGRADE_HISTORY("Check software-upgrade history", "Software-upgrade fault",
-            "kubectl rollout history deploy/o-du", "kubectl rollout history", RootCause.SOFTWARE_UPGRADE_FAULT),
+            "kubectl rollout history deploy/o-du", "kubectl rollout history", "deploy/o-du", RootCause.SOFTWARE_UPGRADE_FAULT),
     RADIO_SCAN("Scan the radio environment", "Neighbour interference",
-            "pm-query cell --counters sinr,rsrp,pci", "pm-query", RootCause.NEIGHBOUR_INTERFERENCE),
+            "pm-query cell --counters sinr,rsrp,pci", "pm-query", "--counters", RootCause.NEIGHBOUR_INTERFERENCE),
     INSPECT_AUTOMATION("Inspect automation logs", "Rogue automation",
-            "kubectl logs deploy/traffic-steering", "kubectl logs", RootCause.ROGUE_AUTOMATION),
+            "kubectl logs deploy/traffic-steering", "kubectl logs", "deploy/traffic-steering", RootCause.ROGUE_AUTOMATION),
     CORRELATE_ALARMS("Correlate the alarm burst", "Alarm storm masking a real fault",
-            "fmcli list-alarms", "fmcli", RootCause.ALARM_STORM);
+            "fmcli list-alarms", "fmcli list-alarms", "", RootCause.ALARM_STORM);
 
     private final String label;
     private final String hypothesis;
     private final String command;
     private final String match;
+    private final String args;   // comma-separated required argument tokens ("" = none)
     private final RootCause implicates;
 
-    DiagnosticType(String label, String hypothesis, String command, String match, RootCause implicates) {
+    DiagnosticType(String label, String hypothesis, String command, String match, String args, RootCause implicates) {
         this.label = label;
         this.hypothesis = hypothesis;
         this.command = command;
         this.match = match;
+        this.args = args;
         this.implicates = implicates;
+    }
+
+    /** Required argument tokens that must appear in the typed command (taught by {@code man}). */
+    public String[] requiredArgs() {
+        return args.isEmpty() ? new String[0] : args.split(",");
     }
 
     /** Human-readable name of the action (for the UI button). */

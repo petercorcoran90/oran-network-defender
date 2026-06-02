@@ -36,6 +36,17 @@ public class ConsoleRenderer {
         return s == null ? "" : s.trim().toLowerCase().replaceAll("\\s+", " ");
     }
 
+    /** True if the typed command supplies every required argument token (taught via {@code man}). */
+    public boolean hasRequiredArgs(String input, String[] required) {
+        String n = normalise(input);
+        for (String token : required) {
+            if (!n.contains(token.toLowerCase())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** Realistic output for a diagnostic: an anomaly when it CONFIRMS its hypothesis, clean otherwise. */
     public String render(DiagnosticType type, EvidenceResult result) {
         boolean hit = result == EvidenceResult.CONFIRMS;

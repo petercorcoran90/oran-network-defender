@@ -45,6 +45,15 @@ class ConsoleRendererTest {
     }
 
     @Test
+    @DisplayName("hasRequiredArgs checks the typed command supplies the required tokens")
+    void hasRequiredArgs() {
+        assertThat(console.hasRequiredArgs("traceroute o-ru-07", new String[]{"o-ru"})).isTrue();
+        assertThat(console.hasRequiredArgs("traceroute", new String[]{"o-ru"})).isFalse();
+        assertThat(console.hasRequiredArgs("pm-query cell --counters sinr", new String[]{"--counters"})).isTrue();
+        assertThat(console.hasRequiredArgs("fmcli list-alarms", new String[]{})).isTrue();
+    }
+
+    @Test
     @DisplayName("unknown / partial input is not recognised")
     void unknownInputNotRecognised() {
         assertThat(console.match("rm -rf /")).isEmpty();

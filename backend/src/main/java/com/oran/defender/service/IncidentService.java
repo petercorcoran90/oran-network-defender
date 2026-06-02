@@ -229,7 +229,10 @@ public class IncidentService {
         run.setDiagnosticType(diagnostic.name());
         run.setResult(evidence.result().name());
         run.setImplicated(evidence.implicated().name());
-        return diagnosticRunRepository.save(run);
+        DiagnosticRun saved = diagnosticRunRepository.save(run);
+        // Running a diagnostic teaches it (persisted) — feeds the tier + field manual.
+        progressionService.learnDiagnostic(player.getUser().getId(), diagnostic);
+        return saved;
     }
 
     @Transactional(readOnly = true)
@@ -262,6 +265,9 @@ public class IncidentService {
         // A remediation command — apply it (same engine + scoring + learning as the button).
         ActionType actionCmd = consoleRenderer.matchAction(commandLine).orElse(null);
         if (actionCmd != null) {
+            if (!consoleRenderer.hasRequiredArgs(commandLine, actionCmd.requiredArgs())) {
+                return new ConsoleResponse(commandLine, true, missingArgs(actionCmd.match()));
+            }
             Long actionId = actionRepository.findByActionName(actionCmd.name())
                     .orElseThrow(() -> new NotFoundException("Action not found")).getId();
             PlayerAction pa = submitAction(sessionId, incidentId, playerId, actionId);
@@ -272,6 +278,9 @@ public class IncidentService {
         if (type == null) {
             String cmd = norm.split(" ")[0];
             return new ConsoleResponse(commandLine, false, "command not found: " + cmd + " — type 'help'");
+        }
+        if (!consoleRenderer.hasRequiredArgs(commandLine, type.requiredArgs())) {
+            return new ConsoleResponse(commandLine, true, missingArgs(type.match()));
         }
 
         SymptomGroup group = SymptomGroup.of(RootCause.valueOf(incident.getRootCause()));
@@ -287,17 +296,26 @@ public class IncidentService {
                 consoleRenderer.render(type, EvidenceResult.valueOf(run.getResult())));
     }
 
+    private String missingArgs(String name) {
+        return name + ": missing or invalid arguments — try 'man " + name + "'";
+    }
+
     private String helpText(Incident incident) {
         SymptomGroup group = SymptomGroup.of(RootCause.valueOf(incident.getRootCause()));
-        StringBuilder sb = new StringBuilder("Diagnostics for this incident (each costs points; budget ")
-                .append(group.diagnosticBudget()).append("):\n");
-        group.diagnostics().forEach(d -> sb.append("  ").append(d.command()).append('\n'));
+        StringBuilder sb = new StringBuilder("Commands for this incident (run 'man <command>' for its arguments):\n");
+        // Names only — the player must learn the arguments (man) or already know them.
+        group.diagnostics().forEach(d -> sb.append("  ").append(d.match()).append('\n'));
         return sb.append("Utility: help · man <command> · clear").toString();
     }
 
     private String manText(String cmd) {
-        return consoleRenderer.match(cmd)
-                .map(d -> d.command() + "\n  " + d.label() + ". Investigates: " + d.hypothesis() + ".")
+        var diag = consoleRenderer.match(cmd);
+        if (diag.isPresent()) {
+            DiagnosticType d = diag.get();
+            return d.command() + "\n  Investigates: " + d.hypothesis() + ".";
+        }
+        return consoleRenderer.matchAction(cmd)
+                .map(a -> a.command() + "\n  Remediation: applies the '" + a.name() + "' fix.")
                 .orElse("No manual entry for " + cmd);
     }
 

@@ -11,24 +11,31 @@ package com.oran.defender.engine;
  * who fixes things with a cheaper correct action scores better than one who brute-forces it.
  */
 public enum ActionType {
-    REBALANCE_TRAFFIC(10, "rrmctl rebalance --cell o-ru-07", "rrmctl rebalance"),
-    RESTART_CELL(20, "kubectl rollout restart deploy/o-du", "kubectl rollout restart"),
-    ROLLBACK_CONFIG(10, "netconf edit-config --rollback", "netconf edit-config"),
-    ROLLBACK_SOFTWARE(15, "kubectl rollout undo deploy/o-du", "kubectl rollout undo"),
-    INCREASE_TRANSMIT_POWER(10, "rrmctl set-power --cell o-ru-07 --delta +3", "rrmctl set-power"),
-    FILTER_ALARMS(5, "fmcli suppress --correlated", "fmcli suppress"),
-    DISABLE_AUTOMATION(10, "ricctl xapp disable traffic-steering", "ricctl xapp disable"),
-    ESCALATE(5, "ticket open --team transport --priority p1", "ticket open"),
-    IGNORE(0, "fmcli ack --no-action", "fmcli ack");
+    REBALANCE_TRAFFIC(10, "rrmctl rebalance --cell o-ru-07", "rrmctl rebalance", "--cell"),
+    RESTART_CELL(20, "kubectl rollout restart deploy/o-du", "kubectl rollout restart", "deploy/o-du"),
+    ROLLBACK_CONFIG(10, "netconf edit-config --rollback", "netconf edit-config", "--rollback"),
+    ROLLBACK_SOFTWARE(15, "kubectl rollout undo deploy/o-du", "kubectl rollout undo", "deploy/o-du"),
+    INCREASE_TRANSMIT_POWER(10, "rrmctl set-power --cell o-ru-07 --delta +3", "rrmctl set-power", "--cell,--delta"),
+    FILTER_ALARMS(5, "fmcli suppress --correlated", "fmcli suppress", "--correlated"),
+    DISABLE_AUTOMATION(10, "ricctl xapp disable traffic-steering", "ricctl xapp disable", "traffic-steering"),
+    ESCALATE(5, "ticket open --team transport --priority p1", "ticket open", "--team,--priority"),
+    IGNORE(0, "fmcli ack --no-action", "fmcli ack", "--no-action");
 
     private final int remediationCost;
     private final String command;
     private final String match;
+    private final String args;   // comma-separated required argument tokens ("" = none)
 
-    ActionType(int remediationCost, String command, String match) {
+    ActionType(int remediationCost, String command, String match, String args) {
         this.remediationCost = remediationCost;
         this.command = command;
         this.match = match;
+        this.args = args;
+    }
+
+    /** Required argument tokens that must appear in the typed command (taught by {@code man}). */
+    public String[] requiredArgs() {
+        return args.isEmpty() ? new String[0] : args.split(",");
     }
 
     public int remediationCost() {
