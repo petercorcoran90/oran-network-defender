@@ -135,6 +135,24 @@ Testcontainers for integration). A straight merge is avoided because (a) both si
 service layer (session-isolation vs diagnostics/progression) and (b) it would drag the AI-style tests
 in. See the consolidation plan agreed with the team.
 
+**Status — done on branch `consolidate` (off current `test-containers`), pending team review:**
+- Feature production code merged; the merge was clean apart from two test files (resolved). The
+  team's existing tests were kept as the baseline and the **AI-style feature tests were dropped**.
+- The team's tests were adapted to the new production signatures only (constructors now take
+  `ProgressionService`; `IncidentResponse` gained investigation fields) and to the learn-on-use
+  behaviour (`submitAction` now reads `player.getUser()`).
+- New **feature tests written in the team's style**: engine (plain JUnit/AssertJ —
+  `SymptomGroup/SkillTier/DiagnosticType/DiagnosticEvaluator/ConsoleRenderer`), services (Mockito —
+  `ProgressionServiceTest`, `IncidentServiceTest` +diagnostics/console, `SessionServiceTest`
+  +training), controllers (their `@WebMvcTest`/direct-unit split), and a Testcontainers
+  `DiagnosticConsoleIntegrationTest`.
+- **Result:** 302 tests green; overall instruction coverage **92.9%** (engine 98.7%, controllers
+  100%, `IncidentService` 90%).
+- **⚠ Needs team sign-off:** `SystemFlowTest`'s leak check was changed. The investigation board now
+  lists *candidate* causes by design, so the true cause shows as one option among several; the
+  assertion was updated to test the real invariant (no `rootCause` field is serialised; the decoy
+  candidate is shown alongside the true one) instead of banning the literal cause string.
+
 ## Open notes / decisions
 - **No Karate** — the API/system layer is `SystemFlowTest` (Testcontainers + `TestRestTemplate`).
 - **Testcontainers needs Docker** in whatever runs the tests (local + CI). GitHub runners have it.
