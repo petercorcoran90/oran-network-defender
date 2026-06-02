@@ -4,8 +4,9 @@ A simulated terminal in the incident view. Instead of clicking one-shot "diagnos
 return a verdict, the player types realistic commands and **reads the output to deduce the cause**.
 Teaches Linux/ops muscle memory *and* diagnostic reasoning at once.
 
-> Status: design only — agree this before any code. Builds on the investigation feature
-> (`SymptomGroup` / `DiagnosticEvaluator` / candidate board) already on `feat/investigation`.
+> Status: **MVP implemented** on `feat/console` (authentic command names; buttons kept as easy mode;
+> candidate board kept). Built on the investigation feature (`SymptomGroup` / `DiagnosticEvaluator` /
+> candidate board) from `feat/investigation`. The optional `cat`/`grep` log-file layer is deferred.
 
 ---
 
