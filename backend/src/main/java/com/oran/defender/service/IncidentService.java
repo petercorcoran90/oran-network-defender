@@ -1,11 +1,14 @@
 package com.oran.defender.service;
 
+import com.oran.defender.dto.ConsoleResponse;
 import com.oran.defender.dto.IncidentResponse;
 import com.oran.defender.engine.ActionType;
+import com.oran.defender.engine.ConsoleRenderer;
 import com.oran.defender.engine.DiagnosticEvaluator;
 import com.oran.defender.engine.DiagnosticType;
 import com.oran.defender.engine.EvaluationResult;
 import com.oran.defender.engine.Evidence;
+import com.oran.defender.engine.EvidenceResult;
 import com.oran.defender.engine.IncidentEvaluator;
 import com.oran.defender.engine.RootCause;
 import com.oran.defender.engine.ScoreCalculator;
@@ -53,6 +56,7 @@ public class IncidentService {
     private final ScoreService scoreService;
     private final DiagnosticEvaluator diagnosticEvaluator;
     private final DiagnosticRunRepository diagnosticRunRepository;
+    private final ConsoleRenderer consoleRenderer;
 
     // Each diagnostic a player runs costs this many points off the eventual remediation score, so
     // investigating is a real expense — the accurate, economical player beats the fast guesser,
@@ -68,7 +72,8 @@ public class IncidentService {
                            ScoreCalculator scoreCalculator,
                            ScoreService scoreService,
                            DiagnosticEvaluator diagnosticEvaluator,
-                           DiagnosticRunRepository diagnosticRunRepository) {
+                           DiagnosticRunRepository diagnosticRunRepository,
+                           ConsoleRenderer consoleRenderer) {
         this.incidentRepository = incidentRepository;
         this.playerRepository = playerRepository;
         this.actionRepository = actionRepository;
@@ -79,6 +84,7 @@ public class IncidentService {
         this.scoreService = scoreService;
         this.diagnosticEvaluator = diagnosticEvaluator;
         this.diagnosticRunRepository = diagnosticRunRepository;
+        this.consoleRenderer = consoleRenderer;
     }
 
     @Transactional(readOnly = true)
@@ -221,6 +227,79 @@ public class IncidentService {
     public List<DiagnosticRun> getDiagnostics(Long sessionId, Long incidentId, Long playerId) {
         loadIncidentInSession(sessionId, incidentId); // 404 if it isn't in this session
         return diagnosticRunRepository.findByIncidentIdAndPlayerId(incidentId, playerId);
+    }
+
+    /**
+     * The diagnostic console. Recognised diagnostic commands relevant to this incident run the real
+     * diagnostic (budget + cost via {@link #runDiagnostic}); utility commands (help/man/clear) and
+     * unrecognised input are free. Returns emulated terminal output for the player to interpret —
+     * never the hidden root cause.
+     */
+    @Transactional
+    public ConsoleResponse runConsoleCommand(Long sessionId, Long incidentId, Long playerId, String commandLine) {
+        Incident incident = requireOwnOpenIncident(sessionId, incidentId, playerId);
+        String norm = ConsoleRenderer.normalise(commandLine);
+
+        if (norm.isEmpty() || norm.equals("clear")) {
+            return new ConsoleResponse(commandLine, true, "");
+        }
+        if (norm.equals("help") || norm.equals("?")) {
+            return new ConsoleResponse(commandLine, true, helpText(incident));
+        }
+        if (norm.startsWith("man ")) {
+            return new ConsoleResponse(commandLine, true, manText(norm.substring(4).trim()));
+        }
+
+        DiagnosticType type = consoleRenderer.match(commandLine).orElse(null);
+        if (type == null) {
+            String cmd = norm.split(" ")[0];
+            return new ConsoleResponse(commandLine, false, "command not found: " + cmd + " — type 'help'");
+        }
+
+        SymptomGroup group = SymptomGroup.of(RootCause.valueOf(incident.getRootCause()));
+        if (!group.diagnostics().contains(type)) {
+            // A real command, but it probes a subsystem unrelated to this incident — nominal, free.
+            return new ConsoleResponse(commandLine, true,
+                    consoleRenderer.render(type, EvidenceResult.RULES_OUT) + "\n(no bearing on this incident)");
+        }
+
+        // A relevant diagnostic — runs the real thing (enforces budget + point cost, records it).
+        DiagnosticRun run = runDiagnostic(sessionId, incidentId, playerId, type.name());
+        return new ConsoleResponse(commandLine, true,
+                consoleRenderer.render(type, EvidenceResult.valueOf(run.getResult())));
+    }
+
+    private String helpText(Incident incident) {
+        SymptomGroup group = SymptomGroup.of(RootCause.valueOf(incident.getRootCause()));
+        StringBuilder sb = new StringBuilder("Diagnostics for this incident (each costs points; budget ")
+                .append(group.diagnosticBudget()).append("):\n");
+        group.diagnostics().forEach(d -> sb.append("  ").append(d.command()).append('\n'));
+        return sb.append("Utility: help · man <command> · clear").toString();
+    }
+
+    private String manText(String cmd) {
+        return consoleRenderer.match(cmd)
+                .map(d -> d.command() + "\n  " + d.label() + ". Investigates: " + d.hypothesis() + ".")
+                .orElse("No manual entry for " + cmd);
+    }
+
+    private Incident requireOwnOpenIncident(Long sessionId, Long incidentId, Long playerId) {
+        Incident incident = loadIncidentInSession(sessionId, incidentId);
+        Player player = playerRepository.findById(playerId)
+                .orElseThrow(() -> new NotFoundException("Player not found"));
+        if (!player.getGameSession().getId().equals(sessionId)) {
+            throw new InvalidActionException("Player is not part of this session");
+        }
+        if (!incident.getPlayer().getId().equals(playerId)) {
+            throw new InvalidActionException("Incident does not belong to this player");
+        }
+        if (incident.getGameSession().getStatus() != SessionStatus.ACTIVE) {
+            throw new InvalidActionException("Session is not active");
+        }
+        if (incident.getStatus() != IncidentStatus.OPEN) {
+            throw new InvalidActionException("Incident is already resolved");
+        }
+        return incident;
     }
 
     private DiagnosticType parseDiagnostic(String name) {

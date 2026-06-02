@@ -24,7 +24,7 @@ public class ConsoleRenderer {
                 .findFirst();
     }
 
-    static String normalise(String s) {
+    public static String normalise(String s) {
         return s == null ? "" : s.trim().toLowerCase().replaceAll("\\s+", " ");
     }
 

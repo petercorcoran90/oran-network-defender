@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.oran.defender.dto.ConsoleResponse;
 import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.Action;
@@ -185,5 +186,43 @@ class IncidentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].diagnostic").value("TRACE_TRANSPORT"))
                 .andExpect(jsonPath("$[0].result").value("CONFIRMS"));
+    }
+
+    // ---- console ----
+
+    private static final String CONSOLE_URL = "/api/sessions/1/incidents/3/console";
+
+    @Test
+    @DisplayName("POST console -> 200 with emulated output")
+    void console() throws Exception {
+        given(incidentService.runConsoleCommand(1L, 3L, 2L, "traceroute o-ru-07"))
+                .willReturn(new ConsoleResponse("traceroute o-ru-07", true, "3  o-ru-07  2.8 ms  57% loss"));
+
+        mvc.perform(post(CONSOLE_URL).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2,\"command\":\"traceroute o-ru-07\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recognised").value(true))
+                .andExpect(jsonPath("$.output").value("3  o-ru-07  2.8 ms  57% loss"));
+    }
+
+    @Test
+    @DisplayName("POST console with a blank command -> 400")
+    void consoleBlank() throws Exception {
+        mvc.perform(post(CONSOLE_URL).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2,\"command\":\"\"}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(incidentService);
+    }
+
+    @Test
+    @DisplayName("POST console with an over-long command -> 400 (input bounded)")
+    void consoleTooLong() throws Exception {
+        String huge = "a".repeat(201);
+        mvc.perform(post(CONSOLE_URL).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2,\"command\":\"" + huge + "\"}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(incidentService);
     }
 }

@@ -1,5 +1,6 @@
 package com.oran.defender.controller;
 
+import com.oran.defender.dto.ConsoleResponse;
 import com.oran.defender.dto.DiagnosticResponse;
 import com.oran.defender.dto.IncidentResponse;
 import com.oran.defender.dto.PlayerActionResponse;
@@ -7,6 +8,7 @@ import com.oran.defender.service.IncidentService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,6 +25,7 @@ public class IncidentController {
 
     record SubmitActionRequest(@NotNull Long playerId, @NotNull Long actionId) {}
     record RunDiagnosticRequest(@NotNull Long playerId, @NotBlank String diagnostic) {}
+    record ConsoleRequest(@NotNull Long playerId, @NotBlank @Size(max = 200) String command) {}
 
     // Get incidents for a session — pass ?playerId= for one player's incidents,
     // and/or ?status= to filter by OPEN, RESOLVED, FAILED
@@ -73,5 +76,13 @@ public class IncidentController {
                                                    @RequestParam Long playerId) {
         return incidentService.getDiagnostics(sessionId, incidentId, playerId).stream()
                 .map(DiagnosticResponse::from).toList();
+    }
+
+    // Diagnostic console: run a typed command against an incident, get emulated terminal output
+    @PostMapping("/{incidentId}/console")
+    public ConsoleResponse console(@PathVariable Long sessionId,
+                                   @PathVariable Long incidentId,
+                                   @Valid @RequestBody ConsoleRequest req) {
+        return incidentService.runConsoleCommand(sessionId, incidentId, req.playerId(), req.command());
     }
 }

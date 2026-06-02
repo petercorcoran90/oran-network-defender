@@ -3,6 +3,7 @@ package com.oran.defender.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.oran.defender.dto.ConsoleResponse;
 import com.oran.defender.engine.RootCause;
 import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.model.AppUser;
@@ -169,5 +170,70 @@ class DiagnosticIntegrationTest extends AbstractMySqlIntegrationTest {
 
         // …but re-running an already-run diagnostic is still allowed (idempotent, no extra charge).
         assertThat(incidentService.runDiagnostic(s, i, p, "TRACE_TRANSPORT")).isNotNull();
+    }
+
+    // ---- console ----
+
+    @Test
+    @DisplayName("console: help lists the incident's authentic commands")
+    void consoleHelp() {
+        Scene sc = scene("DIA008", "dia-g", RootCause.TRANSPORT_LINK_FAULT, "Cell-A");
+        ConsoleResponse r = incidentService.runConsoleCommand(
+                sc.session().getId(), sc.incident().getId(), sc.player().getId(), "help");
+        assertThat(r.recognised()).isTrue();
+        assertThat(r.output()).contains("traceroute o-ru").contains("netconf get-config");
+    }
+
+    @Test
+    @DisplayName("console: a relevant command runs the diagnostic and prints realistic output")
+    void consoleRunsDiagnostic() {
+        Scene sc = scene("DIA009", "dia-h", RootCause.TRANSPORT_LINK_FAULT, "Cell-A");
+        Long s = sc.session().getId(), i = sc.incident().getId(), p = sc.player().getId();
+
+        ConsoleResponse r = incidentService.runConsoleCommand(s, i, p, "traceroute o-ru-07");
+
+        assertThat(r.recognised()).isTrue();
+        assertThat(r.output()).contains("loss");                                   // reads like traceroute
+        assertThat(diagnostics.countByIncidentIdAndPlayerId(i, p)).isEqualTo(1);    // recorded + charged
+    }
+
+    @Test
+    @DisplayName("console: unknown input is safe and free (nothing executed, no charge)")
+    void consoleUnknownCommand() {
+        Scene sc = scene("DIA010", "dia-i", RootCause.CELL_OVERLOAD, "Cell-A");
+        Long s = sc.session().getId(), i = sc.incident().getId(), p = sc.player().getId();
+
+        ConsoleResponse r = incidentService.runConsoleCommand(s, i, p, "rm -rf /");
+
+        assertThat(r.recognised()).isFalse();
+        assertThat(r.output()).contains("command not found");
+        assertThat(diagnostics.countByIncidentIdAndPlayerId(i, p)).isZero();
+    }
+
+    @Test
+    @DisplayName("console: a command for an unrelated subsystem is recognised but free")
+    void consoleIrrelevantCommand() {
+        // CONGESTION's only relevant diagnostic is INSPECT_AUTOMATION — traceroute doesn't apply.
+        Scene sc = scene("DIA011", "dia-j", RootCause.CELL_OVERLOAD, "Cell-A");
+        Long s = sc.session().getId(), i = sc.incident().getId(), p = sc.player().getId();
+
+        ConsoleResponse r = incidentService.runConsoleCommand(s, i, p, "traceroute o-ru-07");
+
+        assertThat(r.recognised()).isTrue();
+        assertThat(r.output()).contains("no bearing on this incident");
+        assertThat(diagnostics.countByIncidentIdAndPlayerId(i, p)).isZero();
+    }
+
+    @Test
+    @DisplayName("console: relevant commands still respect the per-incident budget")
+    void consoleRespectsBudget() {
+        Scene sc = scene("DIA012", "dia-k", RootCause.TRANSPORT_LINK_FAULT, "Cell-A"); // budget 2
+        Long s = sc.session().getId(), i = sc.incident().getId(), p = sc.player().getId();
+
+        incidentService.runConsoleCommand(s, i, p, "traceroute o-ru");
+        incidentService.runConsoleCommand(s, i, p, "netconf get-config o-du");
+
+        assertThatThrownBy(() -> incidentService.runConsoleCommand(s, i, p, "kubectl rollout history deploy/o-du"))
+                .isInstanceOf(InvalidActionException.class);
     }
 }
