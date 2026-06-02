@@ -148,6 +148,8 @@ export function createBackendStore(conn) {
         status: inc.status.toLowerCase(), // open | resolved | failed
         detectedAt: Date.parse(inc.createdAt),
         description: inc.description,
+        symptomGroup: inc.symptomGroup || null,
+        diagnostics: inc.availableDiagnostics || [], // [{ name, label }] — what to investigate with
         metrics: cell
           ? { signalQuality: Math.round(cell.signalQuality), userLoad: Math.round(cell.userLoad), latency: Math.round(cell.latency), packetLoss: Math.round(cell.packetLoss) }
           : { signalQuality: 0, userLoad: 0, latency: 0, packetLoss: 0 },
@@ -213,6 +215,15 @@ export function createBackendStore(conn) {
     return outcome; // { result: SUCCESS|PARTIAL|FAILED, pointsAwarded, ... } or null
   }
 
+  // Investigation: run a diagnostic (returns its evidence) / fetch evidence gathered so far.
+  async function runDiagnostic(incidentId, diagnostic) {
+    return Api.runDiagnostic(sessionId, Number(incidentId), playerId, diagnostic);
+  }
+
+  async function getDiagnostics(incidentId) {
+    return Api.getDiagnostics(sessionId, Number(incidentId), playerId);
+  }
+
   function acknowledge() { /* backend has no acknowledge step — no-op */ }
 
   // Leave the match — ends the session so the opponent is shown the result too.
@@ -237,6 +248,8 @@ export function createBackendStore(conn) {
     getState: () => state,
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
     applyAction,
+    runDiagnostic,
+    getDiagnostics,
     acknowledge,
     setConfig,
     leave,

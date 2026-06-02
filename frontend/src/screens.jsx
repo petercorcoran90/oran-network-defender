@@ -269,6 +269,21 @@ function IncidentDetail({ state, store, nav, route }) {
   const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
   const [flash, setFlash] = React.useState(null);
   const [outcome, setOutcome] = React.useState(null);
+  const [evidence, setEvidence] = React.useState([]);
+  const [running, setRunning] = React.useState(null);
+  React.useEffect(() => {
+    let active = true;
+    setEvidence([]);
+    store.getDiagnostics(inc.id).then((list) => { if (active) setEvidence(list || []); }).catch(() => {});
+    return () => { active = false; };
+  }, [inc.id]);
+  async function investigate(name) {
+    setRunning(name);
+    const ev = await store.runDiagnostic(inc.id, name);
+    if (ev) setEvidence((prev) => (prev.some((e) => e.diagnostic === ev.diagnostic) ? prev : [...prev, ev]));
+    setRunning(null);
+  }
+  const ranNames = new Set(evidence.map((e) => e.diagnostic));
   async function apply(aid) {
     setFlash(aid);
     const res = await store.applyAction(inc.id, aid);
@@ -310,6 +325,36 @@ function IncidentDetail({ state, store, nav, route }) {
           {failed && <span className="tag crit" style={{ fontSize: 12, padding: '6px 12px' }}><Icon name="x" size={13} /> Failed — wrong action</span>}
         </div>
       </div>
+
+      {(inc.diagnostics && inc.diagnostics.length > 0) && (
+        <div className="panel" style={{ marginBottom: 'var(--gap)' }}>
+          <div className="panel-head">
+            <h2>Investigation</h2>
+            <span className="corner">{inc.symptomGroup || 'Symptom'} · {evidence.length}/{inc.diagnostics.length} run</span>
+          </div>
+          <div className="panel-pad">
+            <div style={{ color: 'var(--text-3)', fontSize: 12.5, marginBottom: 10 }}>
+              The symptoms are ambiguous — run diagnostics to narrow down the cause before you act.
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: evidence.length ? 12 : 0 }}>
+              {inc.diagnostics.map((d) => (
+                <button key={d.name} className="btn" disabled={closed || ranNames.has(d.name) || running === d.name}
+                  onClick={() => investigate(d.name)}>
+                  <Icon name="search" size={13} /> {d.label}{ranNames.has(d.name) ? ' ✓' : ''}
+                </button>
+              ))}
+            </div>
+            {evidence.map((e) => (
+              <div key={e.diagnostic} className="kv" style={{ alignItems: 'center', gap: 8 }}>
+                <span className={'tag ' + (e.result === 'CONFIRMS' ? 'good' : 'muted')}>
+                  {e.result === 'CONFIRMS' ? 'confirms' : 'rules out'}
+                </span>
+                <span className="v" style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{e.finding}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="detail-grid">
         <div className="panel">

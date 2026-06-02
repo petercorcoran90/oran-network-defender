@@ -10,6 +10,8 @@ vi.mock('./api.js', () => ({
     getScoreEvents: vi.fn(),
     getActions: vi.fn(),
     submitAction: vi.fn(),
+    runDiagnostic: vi.fn(),
+    getDiagnostics: vi.fn(),
     leaveSession: vi.fn(),
   },
 }));
@@ -59,7 +61,10 @@ describe('createBackendStore', () => {
       { id: 10, cellName: 'Cell-A', healthStatus: 'WARNING', signalQuality: 80, userLoad: 50, latency: 30, packetLoss: 2, configStatus: 'STABLE' },
     ]);
     Api.getIncidents.mockResolvedValue([
-      { id: 5, cellId: 10, incidentType: 'Cell overload', severity: 'HIGH', status: 'RESOLVED', createdAt: '2026-06-01T10:00:00Z', description: 'Overloaded' },
+      { id: 5, cellId: 10, incidentType: 'Congestion', severity: 'HIGH', status: 'RESOLVED',
+        symptomGroup: 'Congestion',
+        availableDiagnostics: [{ name: 'INSPECT_AUTOMATION', label: 'Inspect automation logs' }],
+        createdAt: '2026-06-01T10:00:00Z', description: 'Overloaded' },
     ]);
     Api.getScoreEvents.mockResolvedValue([
       { id: 1, playerId: 2, points: 140, reason: 'Cell overload / CORRECT', createdAt: '2026-06-01T10:00:00Z' },
@@ -75,10 +80,12 @@ describe('createBackendStore', () => {
 
     const s = store.getState();
     const inc = s.incidents[0];
-    expect(inc.title).toBe('Cell overload');
+    expect(inc.title).toBe('Congestion');
     expect(inc.severity).toBe('high');      // lowercased for the UI
     expect(inc.status).toBe('resolved');
     expect(inc.rec).toEqual([]);            // the hidden root cause is never sent to the client
+    expect(inc.symptomGroup).toBe('Congestion');
+    expect(inc.diagnostics).toEqual([{ name: 'INSPECT_AUTOMATION', label: 'Inspect automation logs' }]);
 
     expect(s.cells[0].health).toBe(58);     // WARNING -> 58
     const me = s.players.find((p) => p.you);
@@ -94,5 +101,19 @@ describe('createBackendStore', () => {
     const outcome = await store.applyAction('5', '4');
     expect(Api.submitAction).toHaveBeenCalledWith(1, 5, 2, 4);
     expect(outcome).toEqual({ result: 'SUCCESS', pointsAwarded: 140 });
+  });
+
+  it('runDiagnostic / getDiagnostics call the API with numeric ids', async () => {
+    Api.runDiagnostic.mockResolvedValue({ diagnostic: 'INSPECT_AUTOMATION', result: 'RULES_OUT' });
+    Api.getDiagnostics.mockResolvedValue([]);
+    store = createBackendStore({ session: { id: 1, sessionCode: 'ABC', status: 'ACTIVE' }, user: { username: 'ava' }, playerId: 2 });
+    await vi.waitFor(() => expect(store.getState().incidents).toHaveLength(1));
+
+    const ev = await store.runDiagnostic('5', 'INSPECT_AUTOMATION');
+    expect(Api.runDiagnostic).toHaveBeenCalledWith(1, 5, 2, 'INSPECT_AUTOMATION');
+    expect(ev).toEqual({ diagnostic: 'INSPECT_AUTOMATION', result: 'RULES_OUT' });
+
+    await store.getDiagnostics('5');
+    expect(Api.getDiagnostics).toHaveBeenCalledWith(1, 5, 2);
   });
 });

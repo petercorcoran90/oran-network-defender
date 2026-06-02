@@ -79,6 +79,13 @@ export const Api = {
   getIncidentActions: (sessionId, incidentId) =>
     request(`/sessions/${sessionId}/incidents/${incidentId}/actions`),
 
+  // --- diagnostics (investigation) ---
+  runDiagnostic: (sessionId, incidentId, playerId, diagnostic) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}/diagnostics`,
+      { method: 'POST', body: { playerId, diagnostic } }),
+  getDiagnostics: (sessionId, incidentId, playerId) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}/diagnostics?playerId=${playerId}`),
+
   // --- scores ---
   getScoreboard: (sessionId) => request(`/sessions/${sessionId}/scores`),
   getScoreEvents: (sessionId) => request(`/sessions/${sessionId}/scores/events`),

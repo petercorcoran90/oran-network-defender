@@ -45,18 +45,27 @@ describe('Scoreboard screen', () => {
 describe('IncidentDetail action submission', () => {
   const baseState = {
     incidents: [{
-      id: 5, title: 'Cell overload', cellId: 'Cell-A', severity: 'high', status: 'open',
-      detectedAt: Date.now(), description: 'Overloaded',
+      id: 5, title: 'Congestion', cellId: 'Cell-A', severity: 'high', status: 'open',
+      detectedAt: Date.now(), description: 'Ambiguous congestion',
+      symptomGroup: 'Congestion',
+      diagnostics: [{ name: 'INSPECT_AUTOMATION', label: 'Inspect automation logs' }],
       metrics: { signalQuality: 40, userLoad: 95, latency: 120, packetLoss: 8 }, rec: [],
     }],
     cells: [{ id: 'Cell-A', health: 25 }],
   };
 
-  it('submits the chosen action and shows the success outcome', async () => {
-    const store = {
+  function storeWith(extra = {}) {
+    return {
       ACTIONS: { 4: { id: 4, name: 'Rebalance Traffic', desc: 'Move load to neighbours', icon: 'shuffle' } },
       applyAction: vi.fn().mockResolvedValue({ result: 'SUCCESS', pointsAwarded: 140 }),
+      getDiagnostics: vi.fn().mockResolvedValue([]),
+      runDiagnostic: vi.fn(),
+      ...extra,
     };
+  }
+
+  it('submits the chosen action and shows the success outcome', async () => {
+    const store = storeWith();
     render(<IncidentDetail state={baseState} store={store} nav={() => {}} route={{ params: { id: 5 } }} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
@@ -69,9 +78,25 @@ describe('IncidentDetail action submission', () => {
 
   it('disables actions once the incident is closed', () => {
     const closedState = { ...baseState, incidents: [{ ...baseState.incidents[0], status: 'resolved' }] };
-    const store = { ACTIONS: { 4: { id: 4, name: 'Rebalance Traffic', desc: 'x', icon: 'shuffle' } }, applyAction: vi.fn() };
+    const store = storeWith({ applyAction: vi.fn() });
     render(<IncidentDetail state={closedState} store={store} nav={() => {}} route={{ params: { id: 5 } }} />);
 
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  });
+
+  it('runs a diagnostic and shows the evidence', async () => {
+    const store = storeWith({
+      runDiagnostic: vi.fn().mockResolvedValue({
+        diagnostic: 'INSPECT_AUTOMATION', label: 'Inspect automation logs',
+        result: 'RULES_OUT', finding: 'Rogue automation — ruled out.',
+      }),
+    });
+    render(<IncidentDetail state={baseState} store={store} nav={() => {}} route={{ params: { id: 5 } }} />);
+
+    const diagBtn = await screen.findByRole('button', { name: /Inspect automation logs/ });
+    fireEvent.click(diagBtn);
+
+    expect(store.runDiagnostic).toHaveBeenCalledWith(5, 'INSPECT_AUTOMATION');
+    expect(await screen.findByText(/Rogue automation — ruled out/)).toBeInTheDocument();
   });
 });
