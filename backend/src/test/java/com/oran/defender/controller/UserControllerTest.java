@@ -2,12 +2,16 @@ package com.oran.defender.controller;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.oran.defender.exception.ConflictException;
+import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.AppUser;
+import com.oran.defender.model.UserSkill;
+import com.oran.defender.service.ProgressionService;
 import com.oran.defender.service.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +31,9 @@ class UserControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private ProgressionService progressionService;
 
     private AppUser user(String username) {
         AppUser u = new AppUser();
@@ -79,5 +86,33 @@ class UserControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.message").value("Username already taken"));
+    }
+
+    @Test
+    @DisplayName("GET /api/users/{id}/skills -> 200 with learned skills + derived tier")
+    void getSkills() throws Exception {
+        given(userService.getUser(1L)).willReturn(user("ava"));
+        UserSkill skill = new UserSkill();
+        skill.setUserId(1L);
+        skill.getLearnedActions().add("REBALANCE_TRAFFIC");
+        given(progressionService.getOrCreate(1L)).willReturn(skill);
+
+        mvc.perform(get("/api/users/1/skills"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tier").value("TRAINEE"))
+                .andExpect(jsonPath("$.learned").value(1))
+                .andExpect(jsonPath("$.total").value(15))
+                .andExpect(jsonPath("$.learnedActions[0]").value("REBALANCE_TRAFFIC"));
+    }
+
+    @Test
+    @DisplayName("GET skills for an unknown user -> 404")
+    void getSkillsUnknownUser() throws Exception {
+        given(userService.getUser(9L)).willThrow(new NotFoundException("User not found"));
+
+        mvc.perform(get("/api/users/9/skills"))
+                .andExpect(status().isNotFound());
+
+        verifyNoInteractions(progressionService);
     }
 }

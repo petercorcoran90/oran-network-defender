@@ -1,6 +1,8 @@
 package com.oran.defender.controller;
 
+import com.oran.defender.dto.UserSkillResponse;
 import com.oran.defender.model.AppUser;
+import com.oran.defender.service.ProgressionService;
 import com.oran.defender.service.UserService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -12,9 +14,11 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final ProgressionService progressionService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, ProgressionService progressionService) {
         this.userService = userService;
+        this.progressionService = progressionService;
     }
 
     record CreateUserRequest(@NotBlank String username, @NotBlank String role) {}
@@ -37,5 +41,12 @@ public class UserController {
     @GetMapping("/{id}")
     public AppUser getUser(@PathVariable Long id) {
         return userService.getUser(id);
+    }
+
+    // A player's learned skills + tier (field manual / progression)
+    @GetMapping("/{id}/skills")
+    public UserSkillResponse getSkills(@PathVariable Long id) {
+        userService.getUser(id); // 404 if the user doesn't exist
+        return UserSkillResponse.from(progressionService.getOrCreate(id));
     }
 }
