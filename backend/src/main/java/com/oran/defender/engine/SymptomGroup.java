@@ -52,6 +52,15 @@ public enum SymptomGroup {
         return diagnostics;
     }
 
+    /**
+     * How many diagnostics a player may run on one incident of this group. Deliberately fewer than
+     * the diagnostics available for the larger group, so you can't fully eliminate by brute force —
+     * you must choose what to test and commit under some residual uncertainty.
+     */
+    public int diagnosticBudget() {
+        return candidates.size() > 2 ? 2 : 1;
+    }
+
     /** The group a given root cause presents as. */
     public static SymptomGroup of(RootCause rootCause) {
         for (SymptomGroup group : values()) {

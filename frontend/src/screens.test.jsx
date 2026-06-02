@@ -49,6 +49,7 @@ describe('IncidentDetail action submission', () => {
       detectedAt: Date.now(), description: 'Ambiguous congestion',
       symptomGroup: 'Congestion',
       diagnostics: [{ name: 'INSPECT_AUTOMATION', label: 'Inspect automation logs' }],
+      diagnosticBudget: 1,
       candidates: [
         { cause: 'CELL_OVERLOAD', label: 'Cell overload', action: 'REBALANCE_TRAFFIC' },
         { cause: 'ROGUE_AUTOMATION', label: 'Rogue automation', action: 'DISABLE_AUTOMATION' },
@@ -104,7 +105,7 @@ describe('IncidentDetail action submission', () => {
     expect(await screen.findByText(/Rogue automation — ruled out/)).toBeInTheDocument();
   });
 
-  it('eliminating a candidate deduces the survivor and recommends its fix', async () => {
+  it('rules a candidate out, uses up the budget, and does NOT hand over the action', async () => {
     const store = storeWith({
       runDiagnostic: vi.fn().mockResolvedValue({
         diagnostic: 'INSPECT_AUTOMATION', label: 'Inspect automation logs',
@@ -115,8 +116,10 @@ describe('IncidentDetail action submission', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /Inspect automation logs/ }));
 
-    // Rogue automation ruled out -> Cell overload is the survivor -> apply Rebalance Traffic.
-    expect(await screen.findByText(/Deduced — apply/)).toBeInTheDocument();
-    expect(screen.getByText('Rebalance Traffic', { selector: 'b' })).toBeInTheDocument();
+    expect(await screen.findByText(/Rogue automation — ruled out/)).toBeInTheDocument();
+    expect(screen.getByText('ruled out')).toBeInTheDocument();          // board updated
+    expect(screen.queryByText(/Deduced — apply/)).toBeNull();           // no auto-answer
+    // budget is 1 — the test is now spent, so the diagnostic can't be run again.
+    expect(screen.getByRole('button', { name: /Inspect automation logs/ })).toBeDisabled();
   });
 });

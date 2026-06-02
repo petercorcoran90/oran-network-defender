@@ -284,16 +284,13 @@ function IncidentDetail({ state, store, nav, route }) {
     setRunning(null);
   }
   const ranNames = new Set(evidence.map((e) => e.diagnostic));
-  // Deduction board: candidates, narrowed by the evidence gathered so far.
+  // Deduction board: candidates, narrowed by the (budget-limited) evidence gathered so far.
   const candidates = inc.candidates || [];
   const confirmedEv = evidence.find((e) => e.result === 'CONFIRMS');
   const eliminated = new Set(evidence.filter((e) => e.result === 'RULES_OUT').map((e) => e.implicated));
-  const surviving = confirmedEv
-    ? candidates.filter((c) => c.cause === confirmedEv.implicated)
-    : candidates.filter((c) => !eliminated.has(c.cause));
   const actByName = Object.fromEntries(Object.values(store.ACTIONS).map((a) => [a.actionName, a]));
-  const deducedActionName = surviving.length === 1 ? surviving[0].action : null;
-  const recAid = deducedActionName && actByName[deducedActionName] ? String(actByName[deducedActionName].id) : null;
+  const budget = inc.diagnosticBudget || 0;
+  const budgetUsed = evidence.length >= budget;
   async function apply(aid) {
     setFlash(aid);
     const res = await store.applyAction(inc.id, aid);
@@ -340,23 +337,23 @@ function IncidentDetail({ state, store, nav, route }) {
         <div className="panel" style={{ marginBottom: 'var(--gap)' }}>
           <div className="panel-head">
             <h2>Investigation</h2>
-            <span className="corner">{inc.symptomGroup || 'Symptom'} · {evidence.length}/{inc.diagnostics.length} run</span>
+            <span className="corner">{inc.symptomGroup || 'Symptom'} · {evidence.length}/{budget} tests used</span>
           </div>
           <div className="panel-pad">
             <div style={{ color: 'var(--text-3)', fontSize: 12.5, marginBottom: 12 }}>
-              The symptoms are ambiguous — run diagnostics to rule causes out, then apply the fix for the one that's left.
+              You can run only {budget} test{budget === 1 ? '' : 's'} here, and each costs points — so you can't
+              check everything. Rule out what you can, then decide which cause it is and apply its fix.
             </div>
 
-            {/* Deduction board: each possible cause + its fix, narrowed by the evidence. */}
+            {/* Deduction board: each possible cause + its fix, narrowed by the evidence so far. */}
             <div style={{ marginBottom: 12 }}>
               {candidates.map((c) => {
+                const confirmed = confirmedEv && c.cause === confirmedEv.implicated;
                 const out = !confirmedEv && eliminated.has(c.cause);
-                const isAnswer = (confirmedEv && c.cause === confirmedEv.implicated)
-                  || (!confirmedEv && surviving.length === 1 && surviving[0].cause === c.cause);
                 return (
                   <div key={c.cause} className="kv" style={{ alignItems: 'center', gap: 8, opacity: out ? 0.5 : 1 }}>
-                    <span className={'tag ' + (isAnswer ? 'good' : out ? 'muted' : 'warn')} style={{ minWidth: 72, textAlign: 'center' }}>
-                      {isAnswer ? 'likely' : out ? 'ruled out' : 'possible'}
+                    <span className={'tag ' + (confirmed ? 'good' : out ? 'muted' : 'warn')} style={{ minWidth: 72, textAlign: 'center' }}>
+                      {confirmed ? 'confirmed' : out ? 'ruled out' : 'possible'}
                     </span>
                     <span style={{ textDecoration: out ? 'line-through' : 'none', color: 'var(--text-2)', fontSize: 13 }}>
                       {c.label} <span style={{ color: 'var(--text-3)' }}>→ fix: {actByName[c.action]?.name || c.action}</span>
@@ -366,20 +363,20 @@ function IncidentDetail({ state, store, nav, route }) {
               })}
             </div>
 
-            {deducedActionName && !closed && (
-              <div style={{ color: 'var(--good)', fontSize: 12.5, marginBottom: 12 }}>
-                Deduced — apply <b>{actByName[deducedActionName]?.name || deducedActionName}</b> (highlighted in Available Actions).
-              </div>
-            )}
-
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: evidence.length ? 12 : 0 }}>
               {inc.diagnostics.map((d) => (
-                <button key={d.name} className="btn" disabled={closed || ranNames.has(d.name) || running === d.name}
+                <button key={d.name} className="btn"
+                  disabled={closed || ranNames.has(d.name) || running === d.name || (budgetUsed && !ranNames.has(d.name))}
                   onClick={() => investigate(d.name)}>
                   <Icon name="search" size={13} /> {d.label}{ranNames.has(d.name) ? ' ✓' : ''}
                 </button>
               ))}
             </div>
+            {budgetUsed && !closed && (
+              <div style={{ color: 'var(--text-3)', fontSize: 12, marginBottom: evidence.length ? 12 : 0 }}>
+                No tests left — make your call from the evidence above.
+              </div>
+            )}
 
             {evidence.map((e) => (
               <div key={e.diagnostic} className="kv" style={{ alignItems: 'center', gap: 8 }}>
@@ -419,7 +416,7 @@ function IncidentDetail({ state, store, nav, route }) {
           <div>
             {catalog.map((aid) => {
               const a = store.ACTIONS[aid];
-              const rec = recAid != null && aid === recAid; // ★ once investigation points to it
+              const rec = false; // no auto-recommend — the player decides which action to apply
               return (
                 <div key={aid} className={'action-row' + (flash === aid ? ' flash' : '')}>
                   <span className="action-ic"><Icon name={a.icon} size={17} /></span>

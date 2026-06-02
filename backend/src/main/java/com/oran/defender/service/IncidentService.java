@@ -34,6 +34,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -53,9 +54,10 @@ public class IncidentService {
     private final DiagnosticEvaluator diagnosticEvaluator;
     private final DiagnosticRunRepository diagnosticRunRepository;
 
-    // Each diagnostic a player runs costs this much "time" against the response-time bonus, so
-    // investigating trades a little speed for certainty (it never costs points directly).
-    static final int DIAGNOSTIC_TIME_PENALTY_SECONDS = 10;
+    // Each diagnostic a player runs costs this many points off the eventual remediation score, so
+    // investigating is a real expense — the accurate, economical player beats the fast guesser,
+    // and "diagnose everything" is a bad strategy. Combined with the per-incident budget below.
+    static final int DIAGNOSTIC_COST = 15;
 
     public IncidentService(IncidentRepository incidentRepository,
                            PlayerRepository playerRepository,
@@ -134,13 +136,13 @@ public class IncidentService {
         // Hand off to the pure engine: hidden root cause + chosen action -> verdict + points.
         RootCause rootCause = RootCause.valueOf(incident.getRootCause());
         ActionType actionType = ActionType.valueOf(action.getActionName());
-        // Wall-clock time plus the time "spent" investigating — each diagnostic this player ran on
-        // this incident erodes the response-time bonus (the cost of gathering certainty).
-        long diagnostics = diagnosticRunRepository.countByIncidentIdAndPlayerId(incidentId, playerId);
-        long responseSeconds = Duration.between(incident.getCreatedAt(), Instant.now()).getSeconds()
-                + diagnostics * DIAGNOSTIC_TIME_PENALTY_SECONDS;
+        long responseSeconds = Duration.between(incident.getCreatedAt(), Instant.now()).getSeconds();
         EvaluationResult verdict = incidentEvaluator.evaluate(rootCause, actionType);
-        int points = scoreCalculator.pointsFor(verdict, responseSeconds, actionType);
+        // Subtract the cost of investigating: every diagnostic this player ran on this incident
+        // costs real points, so over-investigating is penalised regardless of the outcome.
+        long diagnostics = diagnosticRunRepository.countByIncidentIdAndPlayerId(incidentId, playerId);
+        int points = scoreCalculator.pointsFor(verdict, responseSeconds, actionType)
+                - (int) diagnostics * DIAGNOSTIC_COST;
 
         PlayerAction playerAction = new PlayerAction();
         playerAction.setPlayer(player);
@@ -189,23 +191,30 @@ public class IncidentService {
 
         DiagnosticType diagnostic = parseDiagnostic(diagnosticName);
         RootCause rootCause = RootCause.valueOf(incident.getRootCause());
-        if (!SymptomGroup.of(rootCause).diagnostics().contains(diagnostic)) {
+        SymptomGroup group = SymptomGroup.of(rootCause);
+        if (!group.diagnostics().contains(diagnostic)) {
             throw new InvalidActionException("Diagnostic does not apply to this incident");
         }
 
-        // Idempotent: if this diagnostic was already run, return the existing evidence.
-        return diagnosticRunRepository
-                .findByIncidentIdAndPlayerIdAndDiagnosticType(incidentId, playerId, diagnostic.name())
-                .orElseGet(() -> {
-                    Evidence evidence = diagnosticEvaluator.diagnose(rootCause, diagnostic);
-                    DiagnosticRun run = new DiagnosticRun();
-                    run.setIncident(incident);
-                    run.setPlayer(player);
-                    run.setDiagnosticType(diagnostic.name());
-                    run.setResult(evidence.result().name());
-                    run.setImplicated(evidence.implicated().name());
-                    return diagnosticRunRepository.save(run);
-                });
+        // Idempotent: if this diagnostic was already run, return the existing evidence (free).
+        Optional<DiagnosticRun> existing = diagnosticRunRepository
+                .findByIncidentIdAndPlayerIdAndDiagnosticType(incidentId, playerId, diagnostic.name());
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        // Otherwise it's a new test — enforce the per-incident investigation budget.
+        long used = diagnosticRunRepository.countByIncidentIdAndPlayerId(incidentId, playerId);
+        if (used >= group.diagnosticBudget()) {
+            throw new InvalidActionException("Investigation budget used up — commit a remediation");
+        }
+        Evidence evidence = diagnosticEvaluator.diagnose(rootCause, diagnostic);
+        DiagnosticRun run = new DiagnosticRun();
+        run.setIncident(incident);
+        run.setPlayer(player);
+        run.setDiagnosticType(diagnostic.name());
+        run.setResult(evidence.result().name());
+        run.setImplicated(evidence.implicated().name());
+        return diagnosticRunRepository.save(run);
     }
 
     @Transactional(readOnly = true)

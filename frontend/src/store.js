@@ -151,6 +151,7 @@ export function createBackendStore(conn) {
         symptomGroup: inc.symptomGroup || null,
         diagnostics: inc.availableDiagnostics || [], // [{ name, label }] — what to investigate with
         candidates: inc.candidates || [],            // [{ cause, label, action }] — the deduction board
+        diagnosticBudget: inc.diagnosticBudget || 0, // how many diagnostics you may run on this incident
         metrics: cell
           ? { signalQuality: Math.round(cell.signalQuality), userLoad: Math.round(cell.userLoad), latency: Math.round(cell.latency), packetLoss: Math.round(cell.packetLoss) }
           : { signalQuality: 0, userLoad: 0, latency: 0, packetLoss: 0 },

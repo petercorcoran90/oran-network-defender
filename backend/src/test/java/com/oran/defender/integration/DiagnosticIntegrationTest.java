@@ -114,8 +114,8 @@ class DiagnosticIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
-    @DisplayName("running a diagnostic erodes the response-time bonus on the eventual fix")
-    void diagnosticsErodeTimeBonus() {
+    @DisplayName("running a diagnostic costs points off the eventual fix (accuracy beats spam)")
+    void diagnosticsCostPoints() {
         AppUser u = users.save(Fixtures.user("dia-e"));
         GameSession s = sessions.save(Fixtures.activeSession("DIA005", u));
         Player p = players.save(Fixtures.player(u, s, "Blue"));
@@ -126,7 +126,7 @@ class DiagnosticIntegrationTest extends AbstractMySqlIntegrationTest {
         Incident investigated = incidents.save(
                 Fixtures.openIncident(s, p, cB, "Degraded cell", RootCause.CELL_OVERLOAD, Severity.HIGH));
 
-        // Fix one immediately; investigate the other (1 diagnostic = +10s) then fix it.
+        // Fix one immediately; investigate the other (1 diagnostic, -15 pts) then fix it.
         int fast = incidentService.submitAction(
                 s.getId(), noInvestigation.getId(), p.getId(), actionId("REBALANCE_TRAFFIC")).getPointsAwarded();
         incidentService.runDiagnostic(s.getId(), investigated.getId(), p.getId(), "INSPECT_AUTOMATION");
@@ -134,7 +134,7 @@ class DiagnosticIntegrationTest extends AbstractMySqlIntegrationTest {
                 s.getId(), investigated.getId(), p.getId(), actionId("REBALANCE_TRAFFIC")).getPointsAwarded();
 
         assertThat(fast).isPositive();
-        assertThat(afterDiag).isPositive().isLessThan(fast); // investigation cost time, not correctness
+        assertThat(afterDiag).isPositive().isLessThan(fast); // the diagnostic cost real points
     }
 
     @Test
@@ -152,5 +152,22 @@ class DiagnosticIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThatThrownBy(() -> incidentService.runDiagnostic(
                 s.getId(), inc.getId(), p2.getId(), "INSPECT_AUTOMATION"))
                 .isInstanceOf(InvalidActionException.class);
+    }
+
+    @Test
+    @DisplayName("the per-incident diagnostic budget is enforced (can't test everything)")
+    void budgetEnforced() {
+        // Service-degradation has 4 diagnostics but a budget of 2.
+        Scene sc = scene("DIA007", "dia-f", RootCause.TRANSPORT_LINK_FAULT, "Cell-A");
+        Long s = sc.session().getId(), i = sc.incident().getId(), p = sc.player().getId();
+
+        incidentService.runDiagnostic(s, i, p, "TRACE_TRANSPORT");        // 1
+        incidentService.runDiagnostic(s, i, p, "CHECK_NEIGHBOUR_CONFIG"); // 2 — budget used
+
+        assertThatThrownBy(() -> incidentService.runDiagnostic(s, i, p, "CHECK_UPGRADE_HISTORY"))
+                .isInstanceOf(InvalidActionException.class);
+
+        // …but re-running an already-run diagnostic is still allowed (idempotent, no extra charge).
+        assertThat(incidentService.runDiagnostic(s, i, p, "TRACE_TRANSPORT")).isNotNull();
     }
 }

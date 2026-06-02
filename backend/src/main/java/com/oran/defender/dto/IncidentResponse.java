@@ -27,6 +27,7 @@ public record IncidentResponse(
         String symptomGroup,
         List<DiagnosticInfo> availableDiagnostics,
         List<Candidate> candidates,
+        int diagnosticBudget,
         Instant createdAt,
         Instant resolvedAt
 ) {
@@ -41,9 +42,11 @@ public record IncidentResponse(
         String groupLabel = null;
         List<DiagnosticInfo> diagnostics = List.of();
         List<Candidate> candidates = List.of();
+        int budget = 0;
         SymptomGroup group = symptomGroupOf(incident.getRootCause());
         if (group != null) {
             groupLabel = group.label();
+            budget = group.diagnosticBudget();
             diagnostics = group.diagnostics().stream()
                     .map(d -> new DiagnosticInfo(d.name(), d.label()))
                     .toList();
@@ -64,6 +67,7 @@ public record IncidentResponse(
                 groupLabel,
                 diagnostics,
                 candidates,
+                budget,
                 incident.getCreatedAt(),
                 incident.getResolvedAt()
         );

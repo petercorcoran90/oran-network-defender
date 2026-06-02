@@ -59,6 +59,17 @@ class SymptomGroupTest {
         }
     }
 
+    @Test
+    @DisplayName("the diagnostic budget is below the diagnostics available, forcing uncertainty")
+    void diagnosticBudgetForcesUncertainty() {
+        assertThat(SymptomGroup.CONGESTION.diagnosticBudget()).isEqualTo(1);
+        assertThat(SymptomGroup.ALARMS.diagnosticBudget()).isEqualTo(1);
+        assertThat(SymptomGroup.SERVICE_DEGRADATION.diagnosticBudget()).isEqualTo(2);
+        // The 4-candidate group can't be fully eliminated within budget — you must reason + commit.
+        assertThat(SymptomGroup.SERVICE_DEGRADATION.diagnosticBudget())
+                .isLessThan(SymptomGroup.SERVICE_DEGRADATION.diagnostics().size());
+    }
+
     @ParameterizedTest
     @EnumSource(SymptomGroup.class)
     @DisplayName("at most one candidate per group is the 'residual' (implicated by no diagnostic) "
