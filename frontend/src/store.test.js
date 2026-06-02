@@ -10,6 +10,7 @@ vi.mock('./api.js', () => ({
     getScoreEvents: vi.fn(),
     getActions: vi.fn(),
     getUserSkills: vi.fn(),
+    getManual: vi.fn(),
     submitAction: vi.fn(),
     runDiagnostic: vi.fn(),
     getDiagnostics: vi.fn(),
@@ -136,5 +137,15 @@ describe('createBackendStore', () => {
     const err = await store.runConsole('5', 'kubectl logs x');
     expect(err.recognised).toBe(false);
     expect(err.output).toContain('budget');
+  });
+
+  it('getManual fetches the field manual for the user', async () => {
+    Api.getManual.mockResolvedValue({ tier: 'TRAINEE', diagnostics: [], actions: [], diagnosticsTotal: 6, actionsTotal: 9 });
+    store = createBackendStore({ session: { id: 1, sessionCode: 'ABC', status: 'ACTIVE' }, user: { username: 'ava', id: 7 }, playerId: 2 });
+    await vi.waitFor(() => expect(store.getState().incidents).toHaveLength(1));
+
+    const m = await store.getManual();
+    expect(Api.getManual).toHaveBeenCalledWith(7);
+    expect(m.tier).toBe('TRAINEE');
   });
 });

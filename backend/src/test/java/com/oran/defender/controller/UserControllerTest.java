@@ -115,4 +115,24 @@ class UserControllerTest {
 
         verifyNoInteractions(progressionService);
     }
+
+    @Test
+    @DisplayName("GET /api/users/{id}/manual -> learned commands with full detail")
+    void getManual() throws Exception {
+        given(userService.getUser(1L)).willReturn(user("ava"));
+        UserSkill skill = new UserSkill();
+        skill.setUserId(1L);
+        skill.getLearnedDiagnostics().add("TRACE_TRANSPORT");
+        skill.getLearnedActions().add("REBALANCE_TRAFFIC");
+        given(progressionService.getOrCreate(1L)).willReturn(skill);
+
+        mvc.perform(get("/api/users/1/manual"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tier").value("TRAINEE"))
+                .andExpect(jsonPath("$.diagnostics[0].command").value("traceroute o-ru"))
+                .andExpect(jsonPath("$.diagnostics[0].investigates").value("Transport link fault"))
+                .andExpect(jsonPath("$.actions[0].command").value("rrmctl rebalance --cell o-ru-07"))
+                .andExpect(jsonPath("$.diagnosticsTotal").value(6))
+                .andExpect(jsonPath("$.actionsTotal").value(9));
+    }
 }

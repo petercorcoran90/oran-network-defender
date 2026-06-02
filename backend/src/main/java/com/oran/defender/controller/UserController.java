@@ -1,5 +1,6 @@
 package com.oran.defender.controller;
 
+import com.oran.defender.dto.ManualResponse;
 import com.oran.defender.dto.UserSkillResponse;
 import com.oran.defender.model.AppUser;
 import com.oran.defender.service.ProgressionService;
@@ -48,5 +49,12 @@ public class UserController {
     public UserSkillResponse getSkills(@PathVariable Long id) {
         userService.getUser(id); // 404 if the user doesn't exist
         return UserSkillResponse.from(progressionService.getOrCreate(id));
+    }
+
+    // The player's field manual — full detail for the commands they've learned (only those)
+    @GetMapping("/{id}/manual")
+    public ManualResponse getManual(@PathVariable Long id) {
+        userService.getUser(id); // 404 if the user doesn't exist
+        return ManualResponse.from(progressionService.getOrCreate(id));
     }
 }

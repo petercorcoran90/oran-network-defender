@@ -65,6 +65,11 @@ describe('Api client', () => {
     expect(fetch).toHaveBeenCalledWith('/api/users/7/skills', expect.anything());
   });
 
+  it('getManual fetches the field manual', async () => {
+    await Api.getManual(7);
+    expect(fetch).toHaveBeenCalledWith('/api/users/7/manual', expect.anything());
+  });
+
   it('runConsole POSTs the command to the incident', async () => {
     await Api.runConsole(1, 3, 2, 'traceroute o-ru');
     const [url, opts] = fetch.mock.calls[0];

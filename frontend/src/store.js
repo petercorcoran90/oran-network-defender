@@ -232,6 +232,11 @@ export function createBackendStore(conn) {
     return Api.getDiagnostics(sessionId, Number(incidentId), playerId);
   }
 
+  // The player's field manual — the commands they've learned so far.
+  async function getManual() {
+    return Api.getManual(userId);
+  }
+
   // Diagnostic console: send a command, get emulated output. Errors (budget/guard) are returned
   // as printable output so the terminal can show them.
   async function runConsole(incidentId, command) {
@@ -269,6 +274,7 @@ export function createBackendStore(conn) {
     runDiagnostic,
     getDiagnostics,
     runConsole,
+    getManual,
     acknowledge,
     setConfig,
     leave,

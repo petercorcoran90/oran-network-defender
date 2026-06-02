@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 // The 3D map needs WebGL, which jsdom doesn't provide — stub it so the screens import cleanly.
 vi.mock('./NetworkMap3D.jsx', () => ({ NetworkMap: () => null }));
 
-import { Incidents, Scoreboard, IncidentDetail } from './screens.jsx';
+import { Incidents, Scoreboard, IncidentDetail, Actions } from './screens.jsx';
 
 describe('Incidents screen', () => {
   it('lists incidents and shows the active count', () => {
@@ -158,5 +158,32 @@ describe('IncidentDetail action submission', () => {
     render(<IncidentDetail state={learnedState} store={storeWith()} nav={() => {}} route={{ params: { id: 5 } }} />);
 
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+  });
+});
+
+describe('Field Manual', () => {
+  it('shows the commands the player has learned', async () => {
+    const store = {
+      getManual: vi.fn().mockResolvedValue({
+        tier: 'OPERATOR',
+        diagnostics: [{ name: 'TRACE_TRANSPORT', command: 'traceroute o-ru', investigates: 'Transport link fault' }],
+        actions: [{ name: 'REBALANCE_TRAFFIC', label: 'Rebalance traffic', command: 'rrmctl rebalance --cell o-ru-07' }],
+        diagnosticsTotal: 6, actionsTotal: 9,
+      }),
+    };
+    render(<Actions state={{ version: 1, activity: [] }} store={store} nav={() => {}} />);
+
+    expect(await screen.findByText(/traceroute o-ru/)).toBeInTheDocument();
+    expect(screen.getByText(/rrmctl rebalance/)).toBeInTheDocument();
+    expect(screen.getByText('Field Manual')).toBeInTheDocument();
+  });
+
+  it('shows an empty state before anything is learned', async () => {
+    const store = {
+      getManual: vi.fn().mockResolvedValue({ tier: 'TRAINEE', diagnostics: [], actions: [], diagnosticsTotal: 6, actionsTotal: 9 }),
+    };
+    render(<Actions state={{ version: 1, activity: [] }} store={store} nav={() => {}} />);
+
+    expect(await screen.findByText(/Run diagnostics on incidents to learn them/)).toBeInTheDocument();
   });
 });

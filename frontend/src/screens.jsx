@@ -515,45 +515,65 @@ function IncidentDetail({ state, store, nav, route }) {
 // ============================================================
 // 5 · ACTIONS (remediation catalog + applied log)
 // ============================================================
-function Actions({ state, store, nav }) {
-  const open = GameSelectors.activeIncidents(state);
+// The field manual — fills in with the commands the player has learned (server-filtered).
+function Actions({ state, store }) {
+  const [manual, setManual] = React.useState(null);
+  React.useEffect(() => {
+    let active = true;
+    store.getManual().then((m) => { if (active) setManual(m); }).catch(() => {});
+    return () => { active = false; };
+  }, [state.version]); // re-fetch as the player learns more during the match
   const applied = state.activity.filter((a) => a.kind === 'apply');
+  const diags = manual ? manual.diagnostics : [];
+  const acts = manual ? manual.actions : [];
+  const learned = diags.length + acts.length;
+  const total = manual ? manual.diagnosticsTotal + manual.actionsTotal : 0;
   return (
     <div className="fade-in">
-      <div className="page-head"><div><h1>Action Center</h1><div className="sub">Remediation playbook · apply the right fix to score points</div></div></div>
-
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 'var(--gap)' }}>
-        {Object.values(store.ACTIONS).map((a) => (
-          <div key={a.id} className="panel panel-pad" style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <span className="action-ic" style={{ width: 42, height: 42 }}><Icon name={a.icon} size={20} /></span>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontFamily: 'var(--font-head)', fontWeight: 600, fontSize: 15 }}>{a.name}</span>
-              </div>
-              <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 4 }}>{a.desc}</div>
-            </div>
-          </div>
-        ))}
+      <div className="page-head">
+        <div><h1>Field Manual</h1><div className="sub">Commands you've learned{manual ? ` · ${manual.tier}` : ''}</div></div>
+        {manual && <div className="seg"><button className="on">{learned}/{total} learned</button></div>}
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <div className="panel">
-          <div className="panel-head"><h2>Awaiting Action</h2><span className="corner">{open.length} open</span></div>
-          <div className="panel-pad"><ActiveIncidents state={state} nav={nav} limit={8} /></div>
-        </div>
-        <div className="panel">
-          <div className="panel-head"><h2>Recently Applied</h2></div>
-          <div className="panel-pad" style={{ paddingTop: 4, paddingBottom: 4 }}>
-            {applied.length === 0 ? <div className="empty">No actions applied yet.</div> :
-              applied.slice(0, 8).map((a) => (
-                <div key={a.id} className="feed-row">
-                  <span className="when">{timeAgo(a.when)}</span>
-                  <span className="feed-icn" style={{ background: 'color-mix(in oklab,var(--good) 16%,transparent)', color: 'var(--good)' }}><Icon name="check" size={13} /></span>
-                  <span className="body">{a.text}</span>
-                  <span className="pts pos">+{a.points}</span>
+          <div className="panel-head"><h2>Diagnostics</h2><span className="corner">{diags.length}/{manual ? manual.diagnosticsTotal : '–'}</span></div>
+          <div className="panel-pad">
+            {diags.length === 0 ? <div className="empty">Run diagnostics on incidents to learn them.</div> :
+              diags.map((d) => (
+                <div key={d.name} style={{ marginBottom: 12 }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontSize: 12.5 }}>$ {d.command}</div>
+                  <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{d.investigates}</div>
                 </div>
               ))}
           </div>
+        </div>
+        <div className="panel">
+          <div className="panel-head"><h2>Fixes</h2><span className="corner">{acts.length}/{manual ? manual.actionsTotal : '–'}</span></div>
+          <div className="panel-pad">
+            {acts.length === 0 ? <div className="empty">Apply remediations to learn their commands.</div> :
+              acts.map((a) => (
+                <div key={a.name} style={{ marginBottom: 12 }}>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 600, fontSize: 13 }}>{a.label}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontSize: 12.5 }}>$ {a.command}</div>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginTop: 'var(--gap)' }}>
+        <div className="panel-head"><h2>Recently Applied</h2></div>
+        <div className="panel-pad" style={{ paddingTop: 4, paddingBottom: 4 }}>
+          {applied.length === 0 ? <div className="empty">No actions applied yet.</div> :
+            applied.slice(0, 8).map((a) => (
+              <div key={a.id} className="feed-row">
+                <span className="when">{timeAgo(a.when)}</span>
+                <span className="feed-icn" style={{ background: 'color-mix(in oklab,var(--good) 16%,transparent)', color: 'var(--good)' }}><Icon name="check" size={13} /></span>
+                <span className="body">{a.text}</span>
+                <span className="pts pos">+{a.points}</span>
+              </div>
+            ))}
         </div>
       </div>
     </div>

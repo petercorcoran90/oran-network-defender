@@ -45,6 +45,7 @@ export const Api = {
   login: (username) => request('/users/login', { method: 'POST', body: { username } }),
   getUser: (id) => request(`/users/${id}`),
   getUserSkills: (id) => request(`/users/${id}/skills`),
+  getManual: (id) => request(`/users/${id}/manual`),
 
   // --- sessions ---
   createSession: (name, createdByUserId, durationSeconds, difficulty) =>
