@@ -83,10 +83,15 @@ class SystemFlowTest extends AbstractMySqlIntegrationTest {
         assertThat(incident.getStatusCode()).isEqualTo(HttpStatus.OK);
         Long incidentId = incident.getBody().id();
 
-        // Security: the hidden root cause must never be serialised to a client.
+        // Security: the hidden root cause must never be serialised as the answer. The investigation
+        // board deliberately lists the *candidate* causes (so the player must deduce which is real),
+        // so the true cause CELL_OVERLOAD appears only as one option among several — never on its
+        // own. The response carries no `rootCause` field, and the decoy candidate ROGUE_AUTOMATION
+        // is presented identically alongside it, so the client cannot tell which candidate is real.
         String incidentJson = rest.getForObject(
                 "/api/sessions/" + sessionId + "/incidents/" + incidentId, String.class);
-        assertThat(incidentJson).doesNotContain("rootCause").doesNotContain("CELL_OVERLOAD");
+        assertThat(incidentJson).doesNotContain("rootCause");
+        assertThat(incidentJson).contains("ROGUE_AUTOMATION"); // true cause hidden among candidates, not singled out
 
         // 6. The player submits the correct remediation (REBALANCE_TRAFFIC fixes CELL_OVERLOAD).
         ResponseEntity<PlayerActionResponse> outcome = rest.postForEntity(

@@ -9,6 +9,7 @@ import com.oran.defender.model.AppUser;
 import com.oran.defender.model.DiagnosticRun;
 import com.oran.defender.model.GameSession;
 import com.oran.defender.model.Incident;
+import com.oran.defender.model.Incident.IncidentStatus;
 import com.oran.defender.model.Incident.Severity;
 import com.oran.defender.model.NetworkCell;
 import com.oran.defender.model.Player;
@@ -51,12 +52,20 @@ class DiagnosticConsoleIntegrationTest extends AbstractMySqlIntegrationTest {
     private record Scenario(GameSession session, Player player, Incident incident, Long userId) {}
 
     private Scenario degradedTransport(String code) {
+        return scenario(code, "Service degradation", RootCause.TRANSPORT_LINK_FAULT);
+    }
+
+    private Scenario overloaded(String code) {
+        return scenario(code, "Cell overload", RootCause.CELL_OVERLOAD);
+    }
+
+    private Scenario scenario(String code, String type, RootCause cause) {
         AppUser user = users.save(Fixtures.user("investigator-" + code));
         GameSession session = sessions.save(Fixtures.activeSession(code, user));
         Player player = players.save(Fixtures.player(user, session, "Blue"));
         NetworkCell cell = cells.save(Fixtures.cell(session, player, "Cell-A"));
         Incident incident = incidents.save(Fixtures.openIncident(
-                session, player, cell, "Service degradation", RootCause.TRANSPORT_LINK_FAULT, Severity.HIGH));
+                session, player, cell, type, cause, Severity.HIGH));
         return new Scenario(session, player, incident, user.getId());
     }
 
@@ -122,5 +131,62 @@ class DiagnosticConsoleIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(res.output()).contains("missing or invalid arguments");
         assertThat(diagnosticRuns.countByIncidentIdAndPlayerId(s.incident().getId(), s.player().getId()))
                 .isZero();
+    }
+
+    // ---- the console can also apply remediations (same engine + scoring as the action button) ----
+
+    @Test
+    @DisplayName("a remediation command applies the fix and resolves the incident")
+    void consoleAppliesRemediation() {
+        Scenario s = overloaded("DIAG05"); // REBALANCE_TRAFFIC is the correct fix for CELL_OVERLOAD
+
+        ConsoleResponse res = incidentService.runConsoleCommand(
+                s.session().getId(), s.incident().getId(), s.player().getId(), "rrmctl rebalance --cell o-ru-07");
+
+        assertThat(res.recognised()).isTrue();
+        assertThat(res.output()).contains("resolved");
+        assertThat(incidents.findById(s.incident().getId()).orElseThrow().getStatus())
+                .isEqualTo(IncidentStatus.RESOLVED);
+    }
+
+    @Test
+    @DisplayName("a remediation command without its required argument is rejected, not applied")
+    void consoleRemediationMissingArg() {
+        Scenario s = overloaded("DIAG06");
+
+        ConsoleResponse res = incidentService.runConsoleCommand(
+                s.session().getId(), s.incident().getId(), s.player().getId(), "rrmctl rebalance"); // missing --cell
+
+        assertThat(res.output()).contains("missing or invalid arguments");
+        assertThat(incidents.findById(s.incident().getId()).orElseThrow().getStatus())
+                .isEqualTo(IncidentStatus.OPEN); // nothing applied
+    }
+
+    @Test
+    @DisplayName("a real command that probes an unrelated subsystem is free and has no bearing")
+    void consoleUnrelatedCommand() {
+        Scenario s = overloaded("DIAG07"); // CONGESTION group; alarm correlation belongs to ALARMS
+
+        ConsoleResponse res = incidentService.runConsoleCommand(
+                s.session().getId(), s.incident().getId(), s.player().getId(), "fmcli list-alarms");
+
+        assertThat(res.recognised()).isTrue();
+        assertThat(res.output()).contains("no bearing on this incident");
+        assertThat(diagnosticRuns.countByIncidentIdAndPlayerId(s.incident().getId(), s.player().getId()))
+                .isZero(); // unrelated probe records nothing
+    }
+
+    @Test
+    @DisplayName("'man' for a remediation command explains it without applying it")
+    void consoleManForAction() {
+        Scenario s = overloaded("DIAG08");
+
+        ConsoleResponse res = incidentService.runConsoleCommand(
+                s.session().getId(), s.incident().getId(), s.player().getId(), "man rrmctl rebalance");
+
+        assertThat(res.recognised()).isTrue();
+        assertThat(res.output()).contains("Remediation");
+        assertThat(incidents.findById(s.incident().getId()).orElseThrow().getStatus())
+                .isEqualTo(IncidentStatus.OPEN);
     }
 }
