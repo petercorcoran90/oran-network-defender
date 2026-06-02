@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.oran.defender.dto.PlayerResponse;
 import com.oran.defender.dto.SessionResponse;
+import com.oran.defender.dto.TrainingStartResponse;
 import com.oran.defender.exception.ConflictException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.AppUser;
@@ -210,5 +211,28 @@ class SessionControllerTest {
         p.setScore(0);
         p.setReady(true);
         return p;
+    }
+
+    @Test
+    @DisplayName("startTraining creates a solo ACTIVE training session and returns the player's id")
+    void startTraining_success() {
+        GameSession session = buildSession();
+        session.setStatus(SessionStatus.ACTIVE);          // training starts immediately
+        session.setMode(GameSession.Mode.TRAINING);
+        Player player = new Player();
+        player.setId(42L);
+        player.setGameSession(session);
+
+        when(sessionService.createTrainingSession(7L, 300)).thenReturn(player);
+
+        SessionController.StartTrainingRequest req =
+                new SessionController.StartTrainingRequest(7L, 300);
+        TrainingStartResponse result = sessionController.startTraining(req);
+
+        assertNotNull(result);
+        assertEquals(42L, result.playerId());
+        assertEquals("ACTIVE", result.session().status());
+        assertEquals("TRAINING", result.session().mode());
+        verify(sessionService, times(1)).createTrainingSession(7L, 300);
     }
 }

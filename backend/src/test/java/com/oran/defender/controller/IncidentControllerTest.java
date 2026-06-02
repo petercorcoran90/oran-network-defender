@@ -2,19 +2,23 @@ package com.oran.defender.controller;
 
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.oran.defender.dto.ConsoleResponse;
 import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.Action;
+import com.oran.defender.model.DiagnosticRun;
 import com.oran.defender.model.Incident;
 import com.oran.defender.model.Player;
 import com.oran.defender.model.PlayerAction;
 import com.oran.defender.model.PlayerAction.ActionResult;
 import com.oran.defender.service.IncidentService;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -134,5 +138,86 @@ class IncidentControllerTest {
                 .andExpect(jsonPath("$.trace").doesNotExist())
                 .andExpect(jsonPath("$.exception").doesNotExist())
                 .andExpect(jsonPath("$.path").doesNotExist());
+    }
+
+    // ---- investigation endpoints: diagnostics + console ----
+
+    private DiagnosticRun sampleRun() {
+        DiagnosticRun run = new DiagnosticRun();
+        run.setId(9L);
+        run.setDiagnosticType("INSPECT_AUTOMATION");
+        run.setResult("RULES_OUT");
+        run.setImplicated("ROGUE_AUTOMATION");
+        return run;
+    }
+
+    @Test
+    @DisplayName("POST diagnostics -> 200 with the evidence (no hidden root cause)")
+    void runDiagnosticValid() throws Exception {
+        given(incidentService.runDiagnostic(1L, 3L, 2L, "INSPECT_AUTOMATION")).willReturn(sampleRun());
+
+        mvc.perform(post("/api/sessions/1/incidents/3/diagnostics").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2,\"diagnostic\":\"INSPECT_AUTOMATION\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.diagnostic").value("INSPECT_AUTOMATION"))
+                .andExpect(jsonPath("$.result").value("RULES_OUT"))
+                .andExpect(jsonPath("$.finding").exists())
+                .andExpect(jsonPath("$.rootCause").doesNotExist()); // the answer is never serialised
+    }
+
+    @Test
+    @DisplayName("POST diagnostics without a diagnostic name -> 400, service untouched")
+    void runDiagnosticMissingName() throws Exception {
+        mvc.perform(post("/api/sessions/1/incidents/3/diagnostics").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(incidentService);
+    }
+
+    @Test
+    @DisplayName("POST diagnostics past the budget -> 400 with the reason")
+    void runDiagnosticBudgetExhausted() throws Exception {
+        given(incidentService.runDiagnostic(1L, 3L, 2L, "INSPECT_AUTOMATION"))
+                .willThrow(new InvalidActionException("Investigation budget used up — commit a remediation"));
+
+        mvc.perform(post("/api/sessions/1/incidents/3/diagnostics").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2,\"diagnostic\":\"INSPECT_AUTOMATION\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Investigation budget used up — commit a remediation"));
+    }
+
+    @Test
+    @DisplayName("GET diagnostics -> 200 with the evidence gathered so far")
+    void getDiagnostics() throws Exception {
+        given(incidentService.getDiagnostics(1L, 3L, 2L)).willReturn(List.of(sampleRun()));
+
+        mvc.perform(get("/api/sessions/1/incidents/3/diagnostics").param("playerId", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].diagnostic").value("INSPECT_AUTOMATION"))
+                .andExpect(jsonPath("$[0].result").value("RULES_OUT"));
+    }
+
+    @Test
+    @DisplayName("POST console -> 200 with the emulated terminal output")
+    void consoleCommand() throws Exception {
+        given(incidentService.runConsoleCommand(1L, 3L, 2L, "help"))
+                .willReturn(new ConsoleResponse("help", true, "Commands for this incident:\n  kubectl logs"));
+
+        mvc.perform(post("/api/sessions/1/incidents/3/console").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2,\"command\":\"help\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recognised").value(true))
+                .andExpect(jsonPath("$.output").exists());
+    }
+
+    @Test
+    @DisplayName("POST console without a command -> 400, service untouched")
+    void consoleMissingCommand() throws Exception {
+        mvc.perform(post("/api/sessions/1/incidents/3/console").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"playerId\":2}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(incidentService);
     }
 }
