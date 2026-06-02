@@ -146,8 +146,12 @@ class SubmitActionIntegrationTest extends AbstractMySqlIntegrationTest {
         Incident p1Incident = incidents.save(Fixtures.openIncident(
                 session, p1, cell, "Cell overload", RootCause.CELL_OVERLOAD, Severity.HIGH));
 
+        Long submitSessionId = session.getId();
+        Long p1IncidentId = p1Incident.getId();
+        Long p2Id = p2.getId();
+        Long rebalanceActionId = actionId("REBALANCE_TRAFFIC");
         assertThatThrownBy(() -> incidentService.submitAction(
-                session.getId(), p1Incident.getId(), p2.getId(), actionId("REBALANCE_TRAFFIC")))
+                submitSessionId, p1IncidentId, p2Id, rebalanceActionId))
                 .isInstanceOf(InvalidActionException.class);
     }
 }

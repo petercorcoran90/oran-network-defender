@@ -21,7 +21,7 @@ public class NetworkCellService {
         // In head-to-head a player should see their own network; without a playerId
         // (e.g. an admin/overview view) return every cell in the session.
         if (playerId != null) {
-            return cellRepository.findByPlayerId(playerId);
+            return cellRepository.findByGameSessionIdAndPlayerId(sessionId, playerId);
         }
         return cellRepository.findByGameSessionId(sessionId);
     }

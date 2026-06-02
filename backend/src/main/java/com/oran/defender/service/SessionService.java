@@ -24,6 +24,8 @@ public class SessionService {
     /** Head-to-head is exactly two players. */
     static final int MAX_PLAYERS = 2;
 
+    private static final String SESSION_NOT_FOUND = "Session not found";
+
     private static final int DEFAULT_DURATION_SECONDS = 300;
     // Ambiguous characters (0/O, 1/I) omitted so codes are easy to read out loud.
     private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -83,7 +85,7 @@ public class SessionService {
     @Transactional
     public GameSession getSession(Long sessionId) {
         GameSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new NotFoundException("Session not found"));
+                .orElseThrow(() -> new NotFoundException(SESSION_NOT_FOUND));
         return endIfExpired(session);
     }
 
@@ -96,7 +98,9 @@ public class SessionService {
 
     @Transactional
     public Player joinSession(Long sessionId, Long userId, String teamName) {
-        GameSession session = getSession(sessionId);
+        GameSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException(SESSION_NOT_FOUND));
+        endIfExpired(session);
         if (session.getStatus() != SessionStatus.WAITING) {
             throw new ConflictException("Session is not accepting players");
         }
@@ -124,7 +128,9 @@ public class SessionService {
      */
     @Transactional
     public GameSession leaveSession(Long sessionId, Long playerId) {
-        GameSession session = getSession(sessionId);
+        GameSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException(SESSION_NOT_FOUND));
+        endIfExpired(session);
         if (session.getStatus() != SessionStatus.ENDED) {
             session.setStatus(SessionStatus.ENDED);
             session.setEndedAt(Instant.now());
@@ -141,7 +147,9 @@ public class SessionService {
      */
     @Transactional
     public GameSession markReady(Long sessionId, Long playerId) {
-        GameSession session = getSession(sessionId);
+        GameSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException(SESSION_NOT_FOUND));
+        endIfExpired(session);
         if (session.getStatus() != SessionStatus.WAITING) {
             throw new ConflictException("Match has already started");
         }
@@ -162,7 +170,9 @@ public class SessionService {
 
     @Transactional
     public GameSession startSession(Long sessionId) {
-        GameSession session = getSession(sessionId);
+        GameSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new NotFoundException(SESSION_NOT_FOUND));
+        endIfExpired(session);
         if (session.getStatus() != SessionStatus.WAITING) {
             throw new ConflictException("Session cannot be started");
         }
@@ -176,7 +186,7 @@ public class SessionService {
     @Transactional(readOnly = true)
     public List<Player> getPlayers(Long sessionId) {
         if (!sessionRepository.existsById(sessionId)) {
-            throw new NotFoundException("Session not found");
+            throw new NotFoundException(SESSION_NOT_FOUND);
         }
         return playerRepository.findByGameSessionIdOrderByScoreDesc(sessionId);
     }

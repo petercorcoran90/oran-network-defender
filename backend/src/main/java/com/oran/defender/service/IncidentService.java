@@ -69,10 +69,10 @@ public class IncidentService {
         IncidentStatus parsed = hasStatus ? parseStatus(status) : null;
         List<Incident> incidents;
         if (playerId != null) {
-            // A player only ever sees their own mirrored incidents.
+            // A player only ever sees their own mirrored incidents, scoped to the session.
             incidents = hasStatus
-                    ? incidentRepository.findByPlayerIdAndStatus(playerId, parsed)
-                    : incidentRepository.findByPlayerId(playerId);
+                    ? incidentRepository.findByGameSessionIdAndPlayerIdAndStatus(sessionId, playerId, parsed)
+                    : incidentRepository.findByGameSessionIdAndPlayerId(sessionId, playerId);
         } else {
             incidents = hasStatus
                     ? incidentRepository.findByGameSessionIdAndStatus(sessionId, parsed)

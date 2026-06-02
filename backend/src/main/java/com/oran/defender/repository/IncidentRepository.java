@@ -13,4 +13,8 @@ public interface IncidentRepository extends JpaRepository<Incident, Long> {
     List<Incident> findByPlayerId(Long playerId);
 
     List<Incident> findByPlayerIdAndStatus(Long playerId, IncidentStatus status);
+
+    List<Incident> findByGameSessionIdAndPlayerId(Long gameSessionId, Long playerId);
+
+    List<Incident> findByGameSessionIdAndPlayerIdAndStatus(Long gameSessionId, Long playerId, IncidentStatus status);
 }
