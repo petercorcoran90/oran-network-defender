@@ -67,3 +67,30 @@ with reasons) — we did **not** disable rules or suppress issues to move rating
   **plain JS without PropTypes/TypeScript**; these are convention findings, not reliability or
   security defects. Maintainability is already rated **A**, so no rule was disabled — the issues
   remain visible on the dashboard with this written rationale.
+
+## OWASP ZAP scan (DAST) — what was found / fixed / accepted
+
+Scanned the running app (`http://localhost:5173`) with OWASP ZAP. No High/Critical findings.
+All reported alerts were missing-security-header / external-dependency issues.
+
+**Fixed:**
+- **CSP not set** → added a strict `Content-Security-Policy` (all `default-src 'self'`, no
+  external origins; explicit `form-action`/`frame-src`/`worker-src`/`manifest-src`).
+- **Missing anti-clickjacking** → `X-Frame-Options: DENY` + CSP `frame-ancestors 'none'`.
+- **X-Content-Type-Options missing** → `nosniff`.
+- **Server version leak** (`nginx/1.31.1`) → `server_tokens off`.
+- **Sub-Resource-Integrity missing** (Google Fonts `<link>`) → **fonts are now self-hosted**
+  (`@fontsource`, bundled by Vite); the external font CDN is gone entirely, so there's no
+  third-party resource to integrity-check and CSP is tightened to `font-src 'self'`.
+- Bonus hardening: `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`,
+  `Cross-Origin-Resource-Policy`.
+
+All headers are set in `frontend/nginx.conf`. Re-scan: **0 FAIL**, 63 passing rules.
+
+**Accepted (with reasons):**
+- **CSP `style-src 'unsafe-inline'`** — required because the React UI uses inline `style={{…}}`
+  attributes throughout; a documented trade-off, not a defect.
+- **Cross-Origin-Embedder-Policy not set** — `require-corp` can break legitimate same-origin/
+  `data:` resources and isn't needed for this app's threat model; COOP + CORP are set instead.
+- **Storable/Cacheable content** and **"Modern Web Application"** — informational (caching static
+  assets is intended; the second is just ZAP detecting an SPA).
