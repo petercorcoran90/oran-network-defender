@@ -51,6 +51,7 @@ class IncidentControllerTest {
         pa.setIncident(i);
         Action a = new Action();
         a.setId(4L);
+        a.setActionName("REBALANCE_TRAFFIC");
         pa.setAction(a);
         pa.setResult(ActionResult.SUCCESS);
         pa.setPointsAwarded(140);

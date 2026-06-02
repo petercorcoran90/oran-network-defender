@@ -15,6 +15,7 @@ import com.oran.defender.engine.ScoreCalculator;
 import com.oran.defender.exception.InvalidActionException;
 import com.oran.defender.exception.NotFoundException;
 import com.oran.defender.model.Action;
+import com.oran.defender.model.AppUser;
 import com.oran.defender.model.GameSession;
 import com.oran.defender.model.GameSession.SessionStatus;
 import com.oran.defender.model.Incident;
@@ -81,6 +82,9 @@ class IncidentServiceTest {
         player.setId(10L);
         player.setGameSession(session);
         player.setScore(0);
+        AppUser user = new AppUser();
+        user.setId(7L);
+        player.setUser(user);
 
         cell = new NetworkCell();
         cell.setId(100L);
