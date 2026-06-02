@@ -24,6 +24,14 @@ public class ConsoleRenderer {
                 .findFirst();
     }
 
+    /** Recognise a typed command line as a remediation action (ignoring its arguments). */
+    public Optional<ActionType> matchAction(String input) {
+        String n = normalise(input);
+        return Arrays.stream(ActionType.values())
+                .filter(a -> n.equals(a.match()) || n.startsWith(a.match() + " "))
+                .findFirst();
+    }
+
     public static String normalise(String s) {
         return s == null ? "" : s.trim().toLowerCase().replaceAll("\\s+", " ");
     }

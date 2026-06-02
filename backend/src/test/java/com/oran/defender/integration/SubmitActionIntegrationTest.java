@@ -49,9 +49,29 @@ class SubmitActionIntegrationTest extends AbstractMySqlIntegrationTest {
     @Autowired private IncidentRepository incidents;
     @Autowired private ScoreEventRepository scoreEvents;
     @Autowired private ActionRepository actions;
+    @Autowired private com.oran.defender.service.ProgressionService progression;
 
     private Long actionId(String name) {
         return actions.findByActionName(name).orElseThrow().getId();
+    }
+
+    @Test
+    @DisplayName("using an action teaches it: justLearned on the first use, then persisted")
+    void usingAnActionLearnsIt() {
+        AppUser user = users.save(Fixtures.user("learner"));
+        GameSession session = sessions.save(Fixtures.activeSession("SUB010", user));
+        Player player = players.save(Fixtures.player(user, session, "Blue"));
+        NetworkCell c1 = cells.save(Fixtures.cell(session, player, "Cell-A"));
+        NetworkCell c2 = cells.save(Fixtures.cell(session, player, "Cell-B"));
+        Incident i1 = incidents.save(Fixtures.openIncident(session, player, c1, "Cell overload", RootCause.CELL_OVERLOAD, Severity.HIGH));
+        Incident i2 = incidents.save(Fixtures.openIncident(session, player, c2, "Cell overload", RootCause.CELL_OVERLOAD, Severity.HIGH));
+
+        PlayerAction first = incidentService.submitAction(session.getId(), i1.getId(), player.getId(), actionId("REBALANCE_TRAFFIC"));
+        assertThat(first.isNewlyLearnedAction()).isTrue();
+        assertThat(progression.hasLearnedAction(user.getId(), com.oran.defender.engine.ActionType.REBALANCE_TRAFFIC)).isTrue();
+
+        PlayerAction second = incidentService.submitAction(session.getId(), i2.getId(), player.getId(), actionId("REBALANCE_TRAFFIC"));
+        assertThat(second.isNewlyLearnedAction()).isFalse(); // already learned
     }
 
     @Test

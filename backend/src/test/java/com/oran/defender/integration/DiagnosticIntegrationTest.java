@@ -225,6 +225,21 @@ class DiagnosticIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    @DisplayName("console: a remediation command applies the fix (and resolves a correct one)")
+    void consoleAppliesFix() {
+        Scene sc = scene("DIA013", "con-x", RootCause.CELL_OVERLOAD, "Cell-A");
+        Long s = sc.session().getId(), i = sc.incident().getId(), p = sc.player().getId();
+
+        // rrmctl rebalance is the correct fix for CELL_OVERLOAD.
+        ConsoleResponse r = incidentService.runConsoleCommand(s, i, p, "rrmctl rebalance --cell o-ru-07");
+
+        assertThat(r.recognised()).isTrue();
+        assertThat(r.output()).contains("resolved");
+        assertThat(incidents.findById(i).orElseThrow().getStatus())
+                .isEqualTo(com.oran.defender.model.Incident.IncidentStatus.RESOLVED);
+    }
+
+    @Test
     @DisplayName("console: relevant commands still respect the per-incident budget")
     void consoleRespectsBudget() {
         Scene sc = scene("DIA012", "dia-k", RootCause.TRANSPORT_LINK_FAULT, "Cell-A"); // budget 2

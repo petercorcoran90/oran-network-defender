@@ -55,9 +55,11 @@ class IncidentControllerTest {
         pa.setIncident(i);
         Action a = new Action();
         a.setId(4L);
+        a.setActionName("REBALANCE_TRAFFIC");
         pa.setAction(a);
         pa.setResult(ActionResult.SUCCESS);
         pa.setPointsAwarded(140);
+        pa.setNewlyLearnedAction(true);
         pa.setSubmittedAt(Instant.parse("2026-06-01T10:00:00Z"));
         return pa;
     }
@@ -74,7 +76,9 @@ class IncidentControllerTest {
                 .andExpect(jsonPath("$.pointsAwarded").value(140))
                 .andExpect(jsonPath("$.playerId").value(2))
                 .andExpect(jsonPath("$.incidentId").value(3))
-                .andExpect(jsonPath("$.actionId").value(4));
+                .andExpect(jsonPath("$.actionId").value(4))
+                .andExpect(jsonPath("$.justLearned").value(true))
+                .andExpect(jsonPath("$.actionCommand").value("rrmctl rebalance --cell o-ru-07"));
     }
 
     @Test

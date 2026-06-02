@@ -30,6 +30,21 @@ class ConsoleRendererTest {
     }
 
     @Test
+    @DisplayName("action commands are recognised, and never collide with diagnostic commands")
+    void recognisesActionCommands() {
+        assertThat(console.matchAction("rrmctl rebalance --cell o-ru-07")).contains(ActionType.REBALANCE_TRAFFIC);
+        assertThat(console.matchAction("kubectl rollout restart deploy/o-du")).contains(ActionType.RESTART_CELL);
+        assertThat(console.matchAction("kubectl rollout undo deploy/o-du")).contains(ActionType.ROLLBACK_SOFTWARE);
+        assertThat(console.matchAction("netconf edit-config --rollback")).contains(ActionType.ROLLBACK_CONFIG);
+
+        // a diagnostic is not an action, and vice-versa — and the netconf get/edit pair don't clash
+        assertThat(console.matchAction("traceroute o-ru")).isEmpty();
+        assertThat(console.match("rrmctl rebalance --cell x")).isEmpty();
+        assertThat(console.match("netconf get-config o-du")).contains(DiagnosticType.CHECK_NEIGHBOUR_CONFIG);
+        assertThat(console.matchAction("netconf get-config o-du")).isEmpty();
+    }
+
+    @Test
     @DisplayName("unknown / partial input is not recognised")
     void unknownInputNotRecognised() {
         assertThat(console.match("rm -rf /")).isEmpty();

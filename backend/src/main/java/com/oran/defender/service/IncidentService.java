@@ -57,6 +57,7 @@ public class IncidentService {
     private final DiagnosticEvaluator diagnosticEvaluator;
     private final DiagnosticRunRepository diagnosticRunRepository;
     private final ConsoleRenderer consoleRenderer;
+    private final ProgressionService progressionService;
 
     // Each diagnostic a player runs costs this many points off the eventual remediation score, so
     // investigating is a real expense — the accurate, economical player beats the fast guesser,
@@ -73,7 +74,8 @@ public class IncidentService {
                            ScoreService scoreService,
                            DiagnosticEvaluator diagnosticEvaluator,
                            DiagnosticRunRepository diagnosticRunRepository,
-                           ConsoleRenderer consoleRenderer) {
+                           ConsoleRenderer consoleRenderer,
+                           ProgressionService progressionService) {
         this.incidentRepository = incidentRepository;
         this.playerRepository = playerRepository;
         this.actionRepository = actionRepository;
@@ -85,6 +87,7 @@ public class IncidentService {
         this.diagnosticEvaluator = diagnosticEvaluator;
         this.diagnosticRunRepository = diagnosticRunRepository;
         this.consoleRenderer = consoleRenderer;
+        this.progressionService = progressionService;
     }
 
     @Transactional(readOnly = true)
@@ -161,6 +164,12 @@ public class IncidentService {
         scoreService.recordScoreEvent(playerId, sessionId,
                 incident.getIncidentType() + " / " + verdict.name(), points);
         applyOutcome(incident, verdict);
+
+        // Using an action teaches it: record it against the player (persisted across matches) and
+        // flag whether this was the first time, so the UI can show the one-time CLI lesson.
+        Long userId = player.getUser().getId();
+        saved.setNewlyLearnedAction(!progressionService.hasLearnedAction(userId, actionType));
+        progressionService.learnAction(userId, actionType);
 
         return saved;
     }
@@ -250,6 +259,15 @@ public class IncidentService {
             return new ConsoleResponse(commandLine, true, manText(norm.substring(4).trim()));
         }
 
+        // A remediation command — apply it (same engine + scoring + learning as the button).
+        ActionType actionCmd = consoleRenderer.matchAction(commandLine).orElse(null);
+        if (actionCmd != null) {
+            Long actionId = actionRepository.findByActionName(actionCmd.name())
+                    .orElseThrow(() -> new NotFoundException("Action not found")).getId();
+            PlayerAction pa = submitAction(sessionId, incidentId, playerId, actionId);
+            return new ConsoleResponse(commandLine, true, actionOutcomeText(actionCmd, pa));
+        }
+
         DiagnosticType type = consoleRenderer.match(commandLine).orElse(null);
         if (type == null) {
             String cmd = norm.split(" ")[0];
@@ -281,6 +299,16 @@ public class IncidentService {
         return consoleRenderer.match(cmd)
                 .map(d -> d.command() + "\n  " + d.label() + ". Investigates: " + d.hypothesis() + ".")
                 .orElse("No manual entry for " + cmd);
+    }
+
+    private String actionOutcomeText(ActionType action, PlayerAction pa) {
+        int pts = pa.getPointsAwarded();
+        String verdict = switch (pa.getResult()) {
+            case SUCCESS -> "✓ resolved";
+            case FAILED -> "✗ wrong action — it backfired";
+            case PARTIAL -> "• no effect — try a different fix";
+        };
+        return action.command() + "\n" + verdict + " (" + (pts >= 0 ? "+" : "") + pts + " pts)";
     }
 
     private Incident requireOwnOpenIncident(Long sessionId, Long incidentId, Long playerId) {
