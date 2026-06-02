@@ -3,6 +3,7 @@ package com.oran.defender.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,6 +14,7 @@ import com.oran.defender.model.GameSession;
 import com.oran.defender.model.GameSession.Difficulty;
 import com.oran.defender.model.GameSession.SessionStatus;
 import com.oran.defender.model.Player;
+import com.oran.defender.model.UserSkill;
 import com.oran.defender.repository.AppUserRepository;
 import com.oran.defender.repository.GameSessionRepository;
 import com.oran.defender.repository.MatchResultRepository;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -169,5 +172,43 @@ class SessionServiceTest {
         sessionService.leaveSession(10L, loser.getId());
 
         verify(matchResultRepository).save(any());
+    }
+
+    // --- createTrainingSession (solo curriculum mode) ---
+
+    @Test
+    @DisplayName("createTrainingSession starts a solo ACTIVE session at the player's tier")
+    void createTrainingSession_startsSoloMatch() {
+        AppUser user = new AppUser();
+        user.setId(7L);
+        user.setUsername("ava");
+        Player savedPlayer = new Player();
+        savedPlayer.setId(50L);
+
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        when(progressionService.getOrCreate(7L)).thenReturn(new UserSkill()); // nothing learned -> TRAINEE
+        when(sessionRepository.findBySessionCode(any())).thenReturn(Optional.empty()); // code is unique
+        when(playerRepository.save(any(Player.class))).thenReturn(savedPlayer);
+
+        Player result = sessionService.createTrainingSession(7L, 300);
+
+        assertThat(result.getId()).isEqualTo(50L);
+
+        ArgumentCaptor<GameSession> captor = ArgumentCaptor.forClass(GameSession.class);
+        verify(sessionRepository, atLeastOnce()).save(captor.capture());
+        GameSession created = captor.getValue();
+        assertThat(created.getMode()).isEqualTo(GameSession.Mode.TRAINING);
+        assertThat(created.getStatus()).isEqualTo(SessionStatus.ACTIVE); // starts immediately, no opponent
+        assertThat(created.getDifficulty()).isEqualTo(Difficulty.EASY);  // TRAINEE -> EASY
+        assertThat(created.getDurationSeconds()).isEqualTo(300);
+    }
+
+    @Test
+    @DisplayName("createTrainingSession throws when the user does not exist")
+    void createTrainingSession_userNotFound() {
+        when(userRepository.findById(7L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> sessionService.createTrainingSession(7L, 300))
+                .isInstanceOf(NotFoundException.class);
     }
 }
