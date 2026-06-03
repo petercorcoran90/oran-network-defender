@@ -117,7 +117,7 @@ function App() {
             const ended = state.sessionStatus === 'ENDED';
             const remaining = state.endsAt != null ? Math.max(0, state.endsAt - Date.now()) : null;
             const label = ended || remaining === 0 ? 'ENDED'
-              : remaining == null ? '--:--'
+              : remaining == null ? 'PRACTICE'
               : `${String(Math.floor(remaining / 60000)).padStart(2, '0')}:${String(Math.floor(remaining / 1000) % 60).padStart(2, '0')}`;
             const danger = ended || (remaining != null && remaining <= 30000);
             return <div className="chip" style={{ color: danger ? 'var(--crit)' : 'var(--text-2)', borderColor: danger ? 'var(--crit)' : 'var(--hair)' }}>⏱ {label}</div>;

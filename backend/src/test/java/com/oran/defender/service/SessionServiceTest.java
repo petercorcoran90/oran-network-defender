@@ -200,7 +200,7 @@ class SessionServiceTest {
         assertThat(created.getMode()).isEqualTo(GameSession.Mode.TRAINING);
         assertThat(created.getStatus()).isEqualTo(SessionStatus.ACTIVE); // starts immediately, no opponent
         assertThat(created.getDifficulty()).isEqualTo(Difficulty.EASY);  // TRAINEE -> EASY
-        assertThat(created.getDurationSeconds()).isEqualTo(300);
+        assertThat(created.getEndedAt()).isNull();                       // training has no time limit
     }
 
     @Test

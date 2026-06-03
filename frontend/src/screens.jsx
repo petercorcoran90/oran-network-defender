@@ -261,13 +261,6 @@ function metricRow(label, value, unit, max, invert) {
   );
 }
 
-// Deduction-board status for one candidate cause (flat, so it isn't a nested ternary).
-function candidateStatus(confirmed, out) {
-  if (confirmed) return { cls: 'good', label: 'confirmed' };
-  if (out) return { cls: 'muted', label: 'ruled out' };
-  return { cls: 'warn', label: 'possible' };
-}
-
 function IncidentDetail({ state, store, nav, route }) {
   const inc = state.incidents.find((i) => i.id === route.params.id);
   // Hooks must run on every render in the same order (rules of hooks), so they are all declared
@@ -276,7 +269,6 @@ function IncidentDetail({ state, store, nav, route }) {
   const [outcome, setOutcome] = React.useState(null);
   const [lesson, setLesson] = React.useState(null);
   const [evidence, setEvidence] = React.useState([]);
-  const [running, setRunning] = React.useState(null);
   const [lines, setLines] = React.useState([]);
   const [cmd, setCmd] = React.useState('');
   const [history, setHistory] = React.useState([]);
@@ -306,12 +298,8 @@ function IncidentDetail({ state, store, nav, route }) {
   const failed = inc.status === 'failed';
   const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
   const learnedActions = new Set(state.learnedActions || []);
-  async function investigate(name) {
-    setRunning(name);
-    const ev = await store.runDiagnostic(inc.id, name);
-    if (ev) setEvidence((prev) => (prev.some((e) => e.diagnostic === ev.diagnostic) ? prev : [...prev, ev]));
-    setRunning(null);
-  }
+  // Actions not yet learned still show as Apply buttons; learned ones drop off (apply via console).
+  const unlearnedActions = catalog.filter((aid) => !learnedActions.has(store.ACTIONS[aid].actionName));
   async function onConsoleKey(e) {
     if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -334,14 +322,7 @@ function IncidentDetail({ state, store, nav, route }) {
     if (res?.output) setLines((l) => [...l, { id: lineSeq.current++, t: res.output }]);
     store.getDiagnostics(inc.id).then((list) => setEvidence(list || [])).catch(() => {});
   }
-  const ranNames = new Set(evidence.map((e) => e.diagnostic));
-  // Deduction board: candidates, narrowed by the (budget-limited) evidence gathered so far.
-  const candidates = inc.candidates || [];
-  const confirmedEv = evidence.find((e) => e.result === 'CONFIRMS');
-  const eliminated = new Set(evidence.filter((e) => e.result === 'RULES_OUT').map((e) => e.implicated));
-  const actByName = Object.fromEntries(Object.values(store.ACTIONS).map((a) => [a.actionName, a]));
-  const budget = inc.diagnosticBudget || 0;
-  const budgetUsed = evidence.length >= budget;
+  const budget = inc.diagnosticBudget || 0; // how many checks the player may run on this incident
   async function apply(aid) {
     setFlash(aid);
     const res = await store.applyAction(inc.id, aid);
@@ -394,46 +375,21 @@ function IncidentDetail({ state, store, nav, route }) {
             <span className="corner">{inc.symptomGroup || 'Symptom'} · {evidence.length}/{budget} tests used</span>
           </div>
           <div className="panel-pad">
-            <div style={{ color: 'var(--text-3)', fontSize: 12.5, marginBottom: 12 }}>
-              You can run only {budget} test{budget === 1 ? '' : 's'} here, and each costs points — so you can't
-              check everything. Rule out what you can, then decide which cause it is and apply its fix.
-            </div>
-
-            {/* Deduction board: each possible cause + its fix, narrowed by the evidence so far. */}
-            <div style={{ marginBottom: 12 }}>
-              {candidates.map((c) => {
-                const confirmed = confirmedEv && c.cause === confirmedEv.implicated;
-                const out = !confirmedEv && eliminated.has(c.cause);
-                const st = candidateStatus(confirmed, out);
-                return (
-                  <div key={c.cause} className="kv" style={{ alignItems: 'center', gap: 8, opacity: out ? 0.5 : 1 }}>
-                    <span className={'tag ' + st.cls} style={{ minWidth: 72, textAlign: 'center' }}>
-                      {st.label}
-                    </span>
-                    <span style={{ textDecoration: out ? 'line-through' : 'none', color: 'var(--text-2)', fontSize: 13 }}>
-                      {c.label} <span style={{ color: 'var(--text-3)' }}>→ fix: {actByName[c.action]?.name || c.action}</span>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: evidence.length ? 12 : 0 }}>
-              {inc.diagnostics.map((d) => (
-                <button key={d.name} className="btn"
-                  disabled={closed || ranNames.has(d.name) || running === d.name || (budgetUsed && !ranNames.has(d.name))}
-                  onClick={() => investigate(d.name)}>
-                  <Icon name="search" size={13} /> {d.label}{ranNames.has(d.name) ? ' ✓' : ''}
-                </button>
-              ))}
-            </div>
-            {budgetUsed && !closed && (
-              <div style={{ color: 'var(--text-3)', fontSize: 12, marginBottom: 12 }}>
-                No tests left — make your call from the evidence above.
+            {/* No buttons, no candidate list — the player diagnoses entirely through the console and
+                learns each command as they use it. The text below is all the guidance they get. */}
+            <div style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.65, marginBottom: 14 }}>
+              This is a <b>{inc.symptomGroup || 'symptom'}</b> incident — the same symptoms can come from
+              more than one fault, so you can't tell the fix just by looking. You have to investigate it in
+              the console below and work out the cause yourself:
+              <div style={{ marginTop: 10, color: 'var(--text-3)', fontSize: 12.5, lineHeight: 1.9 }}>
+                ▸ Type <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>help</span> to list the checks that apply to this incident.<br />
+                ▸ Type <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>man &lt;command&gt;</span> to learn how to run one — including the arguments it needs.<br />
+                ▸ Run a check, read its output, and judge what it confirms or rules out.<br />
+                ▸ You can run only <b>{budget}</b> check{budget === 1 ? '' : 's'} here and each costs points, so investigate deliberately — then apply the right remediation.
               </div>
-            )}
+            </div>
 
-            {/* Console — type authentic commands and read the output (buttons above are the easy mode). */}
+            {/* Console — type authentic commands and read the output. */}
             <div className="k" style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>Console</div>
             <div ref={termRef} style={{ background: 'var(--inset)', border: '1px solid var(--hair)', borderRadius: 'var(--r)', padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-2)', maxHeight: 180, overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
               {lines.map((ln) => (
@@ -485,20 +441,25 @@ function IncidentDetail({ state, store, nav, route }) {
         <div className="panel">
           <div className="panel-head"><h2>Available Actions</h2><span className="corner">{closed ? 'incident closed' : 'choose remediation'}</span></div>
           <div>
-            {catalog.map((aid) => {
-              const a = store.ACTIONS[aid];
-              const learned = learnedActions.has(a.actionName); // learned -> button retires, use the console
-              return (
-                <div key={aid} className={'action-row' + (flash === aid ? ' flash' : '')}>
-                  <span className="action-ic"><Icon name={a.icon} size={17} /></span>
-                  <div style={{ flex: 1 }}>
-                    <div className="at">{a.name}{learned && <span className="pts-pill">✓ learned</span>}</div>
-                    <div className="ad">{learned ? 'You know this one — apply it from the console.' : a.desc}</div>
+            {/* Once a remediation is learned it drops off this list — from then on you apply it
+                from the console. The list shrinks as the player graduates onto the command line. */}
+            {unlearnedActions.length === 0 ? (
+              <div className="empty" style={{ padding: 16 }}>You&apos;ve learned every remediation — apply them from the console above.</div>
+            ) : (
+              unlearnedActions.map((aid) => {
+                const a = store.ACTIONS[aid];
+                return (
+                  <div key={aid} className={'action-row' + (flash === aid ? ' flash' : '')}>
+                    <span className="action-ic"><Icon name={a.icon} size={17} /></span>
+                    <div style={{ flex: 1 }}>
+                      <div className="at">{a.name}</div>
+                      <div className="ad">{a.desc}</div>
+                    </div>
+                    <button className="btn" disabled={closed} onClick={() => apply(aid)}>Apply</button>
                   </div>
-                  <button className="btn" disabled={closed || learned} onClick={() => apply(aid)}>Apply</button>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>

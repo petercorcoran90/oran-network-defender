@@ -81,6 +81,7 @@ public class SessionService {
         player = playerRepository.save(player);
 
         transitionToActive(session);     // no second player / ready-check — start now
+        session.setEndedAt(null);        // training has no time limit — it ends only when the player leaves
         sessionRepository.save(session);
         return player;
     }
