@@ -294,6 +294,11 @@ function IncidentDetail({ state, store, nav, route }) {
   React.useEffect(() => {
     if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
   }, [lines]);
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') setLesson(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   if (!inc) return <div className="empty">Incident not found. <span className="link" onClick={() => nav('incidents')}>Back to list</span></div>;
   const cell = state.cells.find((c) => c.id === inc.cellId);
@@ -499,10 +504,7 @@ function IncidentDetail({ state, store, nav, route }) {
       </div>
 
       {lesson && (
-        <div role="button" tabIndex={0} aria-label="Dismiss"
-          onClick={(e) => { if (e.target === e.currentTarget) setLesson(null); }}
-          onKeyDown={(e) => { if (e.key === 'Escape') setLesson(null); }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'grid', placeItems: 'center', zIndex: 50 }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'grid', placeItems: 'center', zIndex: 50 }}>
           <div className="panel panel-pad" style={{ maxWidth: 520, margin: 16 }}>
             <h2 style={{ marginBottom: 8 }}>Command learned</h2>
             <div style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 14 }}>
