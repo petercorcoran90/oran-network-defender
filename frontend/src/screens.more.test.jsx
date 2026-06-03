@@ -53,6 +53,10 @@ const store = {
     8: { id: 8, name: 'Rollback Config', desc: 'Restore stable parameters', icon: 'rewind' },
   },
   applyAction: vi.fn(),
+  // The Actions screen is now the Field Manual; it asks the store for the learned commands.
+  getManual: vi.fn().mockResolvedValue({
+    tier: 'TRAINEE', diagnostics: [], actions: [], diagnosticsTotal: 6, actionsTotal: 9,
+  }),
 };
 
 describe('additional screen coverage', () => {
@@ -125,15 +129,21 @@ describe('additional screen coverage', () => {
     expect(nav).toHaveBeenCalledWith('incident', { id: 19 });
   });
 
-  it('Actions shows the playbook, awaiting work, applied log, and empty applied state', () => {
+  it('Field Manual shows the learned commands, the applied log, and the empty applied state', async () => {
     const nav = vi.fn();
+    store.getManual.mockResolvedValueOnce({
+      tier: 'OPERATOR',
+      diagnostics: [{ name: 'TRACE_TRANSPORT', command: 'traceroute o-ru', investigates: 'Transport link fault' }],
+      actions: [{ name: 'REBALANCE_TRAFFIC', label: 'Rebalance Traffic', command: 'rrmctl rebalance --cell o-ru-07' }],
+      diagnosticsTotal: 6, actionsTotal: 9,
+    });
     const { rerender } = render(<Actions state={sampleState()} store={store} nav={nav} />);
 
-    expect(screen.getByText('Action Center')).toBeInTheDocument();
-    expect(screen.getByText('Rebalance Traffic')).toBeInTheDocument();
+    expect(screen.getByText('Field Manual')).toBeInTheDocument();
     expect(screen.getByText('Recently Applied')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Configuration drift'));
-    expect(nav).toHaveBeenCalledWith('incident', { id: 2 });
+    // the learned commands arrive asynchronously from getManual()
+    expect(await screen.findByText('$ traceroute o-ru')).toBeInTheDocument();
+    expect(screen.getByText('Rebalance Traffic')).toBeInTheDocument();
 
     rerender(<Actions state={sampleState({ activity: [] })} store={store} nav={nav} />);
     expect(screen.getByText('No actions applied yet.')).toBeInTheDocument();
