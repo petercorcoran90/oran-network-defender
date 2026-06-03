@@ -296,8 +296,8 @@ function IncidentDetail({ state, store, nav, route }) {
   }, [lines]);
   React.useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') setLesson(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    globalThis.addEventListener('keydown', onKey);
+    return () => globalThis.removeEventListener('keydown', onKey);
   }, []);
 
   if (!inc) return <div className="empty">Incident not found. <span className="link" onClick={() => nav('incidents')}>Back to list</span></div>;
