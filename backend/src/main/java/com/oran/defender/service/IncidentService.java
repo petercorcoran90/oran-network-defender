@@ -165,11 +165,14 @@ public class IncidentService {
                 incident.getIncidentType() + " / " + verdict.name(), points);
         applyOutcome(incident, verdict);
 
-        // Using an action teaches it: record it against the player (persisted across matches) and
-        // flag whether this was the first time, so the UI can show the one-time CLI lesson.
-        Long userId = player.getUser().getId();
-        saved.setNewlyLearnedAction(!progressionService.hasLearnedAction(userId, actionType));
-        progressionService.learnAction(userId, actionType);
+        // You only earn a command by getting it right: a CORRECT fix teaches the action (persisted
+        // across matches) and flags first-time use so the UI can show the one-time CLI lesson.
+        // A wrong or ineffective action teaches nothing.
+        if (verdict == EvaluationResult.CORRECT) {
+            Long userId = player.getUser().getId();
+            saved.setNewlyLearnedAction(!progressionService.hasLearnedAction(userId, actionType));
+            progressionService.learnAction(userId, actionType);
+        }
 
         return saved;
     }
