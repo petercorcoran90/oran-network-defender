@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { Api, ApiError } from './api.js';
+import { Icon } from './ui.jsx';
 
 /* ============================================================
    Lobby.jsx — real backend connect flow (the first wired slice).
@@ -21,12 +23,21 @@ function Field({ label, children }) {
   return <div style={{ marginBottom: 14 }}><label style={labelStyle}>{label}</label>{children}</div>;
 }
 
+Field.propTypes = {
+  label: PropTypes.string.isRequired,
+  children: PropTypes.node.isRequired,
+};
+
 function StatusTag({ status }) {
   const cls = status === 'ACTIVE' ? 'good' : status === 'WAITING' ? 'warn' : 'muted';
   return <span className={'tag ' + cls}>{status}</span>;
 }
 
-export default function Lobby({ onEnter }) {
+StatusTag.propTypes = {
+  status: PropTypes.string.isRequired,
+};
+
+export default function Lobby({ onEnter, onTutorial }) {
   const [step, setStep] = useState('identify');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -78,6 +89,14 @@ export default function Lobby({ onEnter }) {
     await run(async () => {
       setScores(await Api.getHighScores());
       setStep('scores');
+    }).catch(() => {});
+  }
+
+  // --- solo training: activates immediately at your tier's difficulty, no opponent ---
+  async function startTraining() {
+    await run(async () => {
+      const tr = await Api.startTraining(user.id, Number(minutes) * 60);
+      onEnter({ user, session: tr.session, playerId: tr.playerId });
     }).catch(() => {});
   }
 
@@ -172,8 +191,11 @@ export default function Lobby({ onEnter }) {
               <button className="btn primary" disabled={busy || !username.trim()} onClick={identify}>
                 {busy ? 'Connecting…' : 'Continue'}
               </button>
-              <button className="btn ghost" disabled={busy} onClick={loadScores} style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}>
-                🏆 Top scorers
+              <button className="btn ghost" disabled={busy} onClick={loadScores} style={{ width: '100%', justifyContent: 'center', marginTop: 10, gap: 8 }}>
+                <Icon name="trophy" size={14} /> Top scorers
+              </button>
+              <button className="btn ghost" onClick={onTutorial} style={{ width: '100%', justifyContent: 'center', marginTop: 10, gap: 8 }}>
+                <Icon name="learn" size={14} /> New here? Take the tutorial
               </button>
             </>
           )}
@@ -234,6 +256,15 @@ export default function Lobby({ onEnter }) {
                 <button className="btn" disabled={busy || !joinCode.trim()} onClick={joinByCode}>Join match</button>
               </div>
               <button className="btn ghost" disabled={busy} onClick={loadSessions} style={{ width: '100%', justifyContent: 'center' }}>Or browse open matches</button>
+
+              <div className="panel" style={{ background: 'var(--inset)', padding: 'var(--pad)', marginTop: 14 }}>
+                <p style={{ color: 'var(--text-3)', fontSize: 12, margin: '0 0 10px' }}>
+                  Solo training · no opponent · difficulty is set by your tier and rises as you learn.
+                </p>
+                <button className="btn" disabled={busy} onClick={startTraining} style={{ width: '100%', justifyContent: 'center' }}>
+                  {busy ? 'Working…' : 'Start training'}
+                </button>
+              </div>
             </>
           )}
 
@@ -307,3 +338,8 @@ export default function Lobby({ onEnter }) {
     </div>
   );
 }
+
+Lobby.propTypes = {
+  onEnter: PropTypes.func.isRequired,
+  onTutorial: PropTypes.func.isRequired,
+};

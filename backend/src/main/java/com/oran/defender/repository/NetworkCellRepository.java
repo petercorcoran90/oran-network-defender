@@ -8,4 +8,6 @@ public interface NetworkCellRepository extends JpaRepository<NetworkCell, Long> 
     List<NetworkCell> findByGameSessionId(Long gameSessionId);
 
     List<NetworkCell> findByPlayerId(Long playerId);
+
+    List<NetworkCell> findByGameSessionIdAndPlayerId(Long gameSessionId, Long playerId);
 }

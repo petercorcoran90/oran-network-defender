@@ -61,6 +61,12 @@ public class GameSession {
     @JoinColumn(name = "created_by_user_id")
     private AppUser createdByUser;
 
+    // HEAD_TO_HEAD = the competitive 2-player match; TRAINING = the solo curriculum mode.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    @org.hibernate.annotations.ColumnDefault("'HEAD_TO_HEAD'")
+    private Mode mode = Mode.HEAD_TO_HEAD;
+
     public enum SessionStatus {
         WAITING,
         ACTIVE,
@@ -71,5 +77,10 @@ public class GameSession {
         EASY,
         MEDIUM,
         HARD
+    }
+
+    public enum Mode {
+        HEAD_TO_HEAD,
+        TRAINING
     }
 }

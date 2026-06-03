@@ -5,6 +5,7 @@ import { Dashboard, NetworkMapPage, Incidents, IncidentDetail, Actions, Scoreboa
 import { useTweaks, TweaksPanel, TweakSection, TweakColor, TweakRadio } from './TweaksPanel.jsx';
 import Lobby from './Lobby.jsx';
 import GameOver from './GameOver.jsx';
+import Tutorial from './Tutorial.jsx';
 
 /* ============================================================
    app.jsx — shell, routing, store subscription, tweaks
@@ -41,6 +42,7 @@ function openTweaks() { globalThis.postMessage({ type: '__activate_edit_mode' },
 
 function App() {
   const [conn, setConn] = useState(null); // real backend session: { user, session, playerId }
+  const [tutorial, setTutorial] = useState(false); // self-contained guided tutorial (no backend)
   const [confirmLeave, setConfirmLeave] = useState(false);
   const store = useMemo(() => (conn ? createBackendStore(conn) : null), [conn]);
   const [, force] = useReducer((x) => x + 1, 0);
@@ -69,8 +71,10 @@ function App() {
     root.setAttribute('data-density', t.density);
   }, [t.accent, t.fontPair, t.density]);
 
+  // The guided tutorial is self-contained — show it over everything else when active.
+  if (tutorial) return <Tutorial onExit={() => setTutorial(false)} />;
   // Gate on the real backend lobby. Until the player enters a match, show the connect flow.
-  if (!conn) return <Lobby onEnter={setConn} />;
+  if (!conn) return <Lobby onEnter={setConn} onTutorial={() => setTutorial(true)} />;
 
   const state = store.getState();
 
@@ -117,7 +121,7 @@ function App() {
             const ended = state.sessionStatus === 'ENDED';
             const remaining = state.endsAt != null ? Math.max(0, state.endsAt - Date.now()) : null;
             const label = ended || remaining === 0 ? 'ENDED'
-              : remaining == null ? '--:--'
+              : remaining == null ? 'PRACTICE'
               : `${String(Math.floor(remaining / 60000)).padStart(2, '0')}:${String(Math.floor(remaining / 1000) % 60).padStart(2, '0')}`;
             const danger = ended || (remaining != null && remaining <= 30000);
             return <div className="chip" style={{ color: danger ? 'var(--crit)' : 'var(--text-2)', borderColor: danger ? 'var(--crit)' : 'var(--hair)' }}>⏱ {label}</div>;

@@ -2,6 +2,8 @@ package com.oran.defender.controller;
 
 import com.oran.defender.dto.PlayerResponse;
 import com.oran.defender.dto.SessionResponse;
+import com.oran.defender.dto.TrainingStartResponse;
+import com.oran.defender.model.Player;
 import com.oran.defender.service.SessionService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -30,12 +32,21 @@ public class SessionController {
     record JoinSessionRequest(@NotNull Long userId, String teamName) {}
     record ReadyRequest(@NotNull Long playerId) {}
     record LeaveRequest(@NotNull Long playerId) {}
+    record StartTrainingRequest(@NotNull Long userId, @Positive Integer durationSeconds) {}
 
     // Create a new game session (status = WAITING)
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public SessionResponse createSession(@Valid @RequestBody CreateSessionRequest req) {
         return SessionResponse.from(sessionService.createSession(req.name(), req.createdByUserId(), req.durationSeconds(), req.difficulty()));
+    }
+
+    // Start a solo Training session (activates immediately at the player's tier difficulty)
+    @PostMapping("/training")
+    @ResponseStatus(HttpStatus.CREATED)
+    public TrainingStartResponse startTraining(@Valid @RequestBody StartTrainingRequest req) {
+        Player player = sessionService.createTrainingSession(req.userId(), req.durationSeconds());
+        return new TrainingStartResponse(SessionResponse.from(player.getGameSession()), player.getId());
     }
 
     // List all sessions with status WAITING or ACTIVE

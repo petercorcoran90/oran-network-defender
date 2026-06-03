@@ -102,6 +102,8 @@ function emptyState(conn) {
     endsAt: conn.session.endedAt ? Date.parse(conn.session.endedAt) : null,
     forfeitedBy: conn.session.forfeitedByPlayerId ?? null,
     config: { difficulty: 'normal', simSpeed: 1 },
+    learnedActions: [], learnedDiagnostics: [], tier: 'TRAINEE',
+    mode: conn.session.mode || 'HEAD_TO_HEAD',
     version: 0,
   };
 }
@@ -109,12 +111,13 @@ function emptyState(conn) {
 export function createBackendStore(conn) {
   const sessionId = conn.session.id;
   const playerId = conn.playerId;
+  const userId = conn.user.id;
   let actions = {};          // backend id -> { id, name, desc, icon }
   let state = emptyState(conn);
   const subs = new Set();
   const notify = () => subs.forEach((f) => f(state));
 
-  function buildState(session, players, cells, incidents, events) {
+  function buildState(session, players, cells, incidents, events, skills) {
     const sorted = [...cells].sort((a, b) => a.cellName.localeCompare(b.cellName));
     const nameById = {};
     const positions = scatterPositions(sorted.map((c) => c.cellName), session.sessionCode || String(session.id));
@@ -148,6 +151,10 @@ export function createBackendStore(conn) {
         status: inc.status.toLowerCase(), // open | resolved | failed
         detectedAt: Date.parse(inc.createdAt),
         description: inc.description,
+        symptomGroup: inc.symptomGroup || null,
+        diagnostics: inc.availableDiagnostics || [], // [{ name, label }] — what to investigate with
+        candidates: inc.candidates || [],            // [{ cause, label, action }] — the deduction board
+        diagnosticBudget: inc.diagnosticBudget || 0, // how many diagnostics you may run on this incident
         metrics: cell
           ? { signalQuality: Math.round(cell.signalQuality), userLoad: Math.round(cell.userLoad), latency: Math.round(cell.latency), packetLoss: Math.round(cell.packetLoss) }
           : { signalQuality: 0, userLoad: 0, latency: 0, packetLoss: 0 },
@@ -186,20 +193,25 @@ export function createBackendStore(conn) {
       endsAt: session.endedAt ? Date.parse(session.endedAt) : null,
       forfeitedBy: session.forfeitedByPlayerId ?? null,
       config: state.config,
+      learnedActions: skills?.learnedActions || [],
+      learnedDiagnostics: skills?.learnedDiagnostics || [],
+      tier: skills?.tier || 'TRAINEE',
+      mode: session.mode || 'HEAD_TO_HEAD',
       version: state.version + 1,
     };
   }
 
   async function refresh() {
     try {
-      const [session, players, cells, incidents, events] = await Promise.all([
+      const [session, players, cells, incidents, events, skills] = await Promise.all([
         Api.getSession(sessionId),
         Api.getPlayers(sessionId),
         Api.getCells(sessionId, playerId),
         Api.getIncidents(sessionId, playerId),
         Api.getScoreEvents(sessionId),
+        Api.getUserSkills(userId),
       ]);
-      state = buildState(session, players, cells, incidents, events);
+      state = buildState(session, players, cells, incidents, events, skills);
       notify();
     } catch { /* transient — keep last good snapshot */ }
   }
@@ -211,6 +223,30 @@ export function createBackendStore(conn) {
     } catch { /* the refresh below reflects the server's truth either way */ }
     await refresh();
     return outcome; // { result: SUCCESS|PARTIAL|FAILED, pointsAwarded, ... } or null
+  }
+
+  // Investigation: run a diagnostic (returns its evidence) / fetch evidence gathered so far.
+  async function runDiagnostic(incidentId, diagnostic) {
+    return Api.runDiagnostic(sessionId, Number(incidentId), playerId, diagnostic);
+  }
+
+  async function getDiagnostics(incidentId) {
+    return Api.getDiagnostics(sessionId, Number(incidentId), playerId);
+  }
+
+  // The player's field manual — the commands they've learned so far.
+  async function getManual() {
+    return Api.getManual(userId);
+  }
+
+  // Diagnostic console: send a command, get emulated output. Errors (budget/guard) are returned
+  // as printable output so the terminal can show them.
+  async function runConsole(incidentId, command) {
+    try {
+      return await Api.runConsole(sessionId, Number(incidentId), playerId, command);
+    } catch (e) {
+      return { command, recognised: false, output: e?.message || 'error' };
+    }
   }
 
   function acknowledge() { /* backend has no acknowledge step — no-op */ }
@@ -227,7 +263,7 @@ export function createBackendStore(conn) {
 
   // load the action catalog once, then begin polling
   Api.getActions().then((list) => {
-    list.forEach((a) => { actions[a.id] = { id: a.id, name: prettyName(a.actionName), desc: a.description, icon: ACTION_ICON[a.actionName] || 'actions' }; });
+    list.forEach((a) => { actions[a.id] = { id: a.id, actionName: a.actionName, name: prettyName(a.actionName), desc: a.description, icon: ACTION_ICON[a.actionName] || 'actions' }; });
     notify();
   }).catch(() => {});
   refresh();
@@ -237,6 +273,10 @@ export function createBackendStore(conn) {
     getState: () => state,
     subscribe(fn) { subs.add(fn); return () => subs.delete(fn); },
     applyAction,
+    runDiagnostic,
+    getDiagnostics,
+    runConsole,
+    getManual,
     acknowledge,
     setConfig,
     leave,

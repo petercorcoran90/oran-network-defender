@@ -14,13 +14,22 @@ breakage is easy to isolate and Sonar produces a fresh report at every step.
 
 | Concern | Choice | Why |
 |--------|--------|-----|
-| Java unit/slice | JUnit 5 + Mockito + `@WebMvcTest` | fast, no DB; ships with `spring-boot-starter-test` |
-| Java integration/system | **Testcontainers (MySQL 8)** via `@SpringBootTest` + `@ServiceConnection` | tests against real MySQL = matches prod, avoids H2 drift |
+| Java unit — engine | JUnit 5 (pure, no Spring) | game rules / scoring are pure functions |
+| Java unit — services | JUnit 5 + **Mockito** (`@ExtendWith(MockitoExtension.class)`, mocked repositories) | fast, readable; asserts service logic without a Spring context or DB |
+| Java unit — controllers | **Direct unit tests** — `new XController(mock(service))`, call the method, assert the DTO/exception (+ `ControllerMappingTest`) | the team's convention: clearer and faster than `@WebMvcTest`/MockMvc |
+| Java integration | **Testcontainers (MySQL 8)** via `@SpringBootTest` | persistence + service wiring against real MySQL (avoids H2 drift) |
+| Java system / API | **Testcontainers + `TestRestTemplate`** (`SystemFlowTest`, RANDOM_PORT) | the brief's mandatory full-flow test, over real HTTP. **No Karate** — this is the "Testcontainers API test". |
 | Java coverage | **JaCoCo** → XML report for Sonar | Sonar reads `sonar.coverage.jacoco.xmlReportPaths` |
-| Frontend | **Vitest + React Testing Library** (already in `package.json`); Playwright for one E2E | component + action + display tests; LCOV coverage for Sonar |
+| Frontend | **Vitest + React Testing Library** | components, action submission, incident/score display; LCOV coverage for Sonar |
 | Python | **pytest** (+ `pytest-cov`) | simulator/data-generation tests; coverage.xml for Sonar |
 | Quality | **SonarQube Community** + **PostgreSQL** (Sonar's own DB) | brief allows SonarQube/SonarCloud; Community is self-hosted |
 | CI | **GitHub Actions** | build + test + coverage on each push |
+
+> **Backend test convention (team):** the service layer and controllers are **unit-tested with
+> Mockito** — instantiate the class with mocked collaborators and assert behaviour directly (no
+> MockMvc). Testcontainers covers persistence/integration, and `SystemFlowTest` (Testcontainers +
+> `TestRestTemplate`) is the one full-flow API/E2E test. Earlier AI-drafted `@WebMvcTest` controller
+> tests were rewritten by the team in this style for readability.
 
 ---
 
@@ -55,11 +64,12 @@ breakage is easy to isolate and Sonar produces a fresh report at every step.
 
 | Layer | Tool | Covers (brief) |
 |------|------|----------------|
-| **Unit** (no Spring/DB) | JUnit | game rules, scoring, incident handling — `IncidentEvaluator` (all 72 incident×action combos) + `ScoreCalculator` (time-bonus boundaries, costs) |
-| **Controller/API** | `@WebMvcTest` (mocked services) | routing, Bean Validation, **negative tests** for invalid actions, error-body shape |
-| **Integration** | Testcontainers MySQL (`@DataJpaTest`/`@SpringBootTest`) | repositories + persistence; `submitAction` heal/cascade; score events |
-| **System / E2E** | Testcontainers MySQL (`@SpringBootTest`) | the brief's mandatory flow: create → join → (seed via ingest) → submit action → score/state changes |
-| **Frontend** | Vitest + RTL (+ Playwright) | key components, action submission, incident/score display, one full-flow E2E |
+| **Unit — engine** | JUnit (pure) | game rules, scoring, incident handling — `IncidentEvaluatorTest` (72 incident×action combos) + `ScoreCalculatorTest` |
+| **Unit — services** | JUnit + Mockito | service logic with mocked repos — `IncidentServiceTest`, `ScoreServiceTest`, `SessionServiceTest` (incl. **negative cases** for invalid actions) |
+| **Unit — controllers** | Direct (mocked service) | routing/mapping + exception→status — `SessionControllerTest`, `IncidentControllerTest`, `UserControllerTest`, `ControllerMappingTest` |
+| **Integration** | Testcontainers MySQL (`@SpringBootTest`) | persistence + service wiring; `submitAction` heal/cascade; **session isolation** (`ServiceIsolationIntegrationTest`); `SessionServiceIntegrationTest`; `PersistenceIntegrationTest` |
+| **System / API** | Testcontainers + `TestRestTemplate` | the brief's mandatory flow over real HTTP: create → join → seed via ingest → submit action → score/state change (`SystemFlowTest`) |
+| **Frontend** | Vitest + RTL | components + flows — `App`, `Lobby`, `GameOver`, `screens`, `ui`, `store`, `api` |
 | **Python** | pytest | simulator output is **repeatable** (seeded), generated incidents are **valid** (rootCause/severity in range) |
 
 ---
@@ -73,8 +83,8 @@ Do them in this order; each is a self-contained commit so regressions are easy t
   - _Done:_ `quality/docker-compose.sonar.yml` + README, JaCoCo in `pom.xml`, root `sonar-project.properties`, `.github/workflows/ci.yml` (3 jobs). `mvn verify` emits `jacoco.xml`; CI green.
 - [x] **Step 1** — **Backend unit tests**: engine (72-combo matrix + scoring). Commit → Sonar.
   - _Done:_ `IncidentEvaluatorTest` (hand-written correct/trap + full 72 sweep + contextual-IGNORE) + `ScoreCalculatorTest` (golden scores + time-bonus boundaries). **120 tests, 100% line+branch on the engine package.**
-- [x] **Step 2** — **Controller/API + negative tests** (`@WebMvcTest`). Commit → Sonar.
-  - _Done:_ `SessionControllerTest` (8), `IncidentControllerTest` (6), `UserControllerTest` (4). Validation 400s, exception→status (404/409/400), leak-free error body. **18 tests.**
+- [x] **Step 2** — **Service & controller unit tests** (Mockito + direct). Commit → Sonar.
+  - _Done (team):_ Mockito service tests (`IncidentServiceTest`, `ScoreServiceTest`, `SessionServiceTest`) + direct controller unit tests (`SessionController`/`Incident`/`User` + `ControllerMappingTest`). Negative cases for invalid actions, exception→status (404/409/400). The team rewrote the earlier AI-drafted `@WebMvcTest` controller tests in this style for readability.
 - [x] **Step 3** — **Integration tests** (Testcontainers MySQL): repositories + `submitAction`/heal/cascade. Commit → Sonar.
   - _Done:_ retired H2; `AbstractMySqlIntegrationTest` (one shared container), `PersistenceIntegrationTest` (2), `SubmitActionIntegrationTest` (4: correct→heal/score, trap→fail/cascade, ineffective→open, cross-player rejected). Local fix: pinned docker-java API to 1.41 (Surefire) for daemons that reject API<1.40.
 - [x] **Step 4** — **System/E2E** full-flow test (the brief's required one). Commit → Sonar.
@@ -110,7 +120,41 @@ Do them in this order; each is a self-contained commit so regressions are easy t
 - Python: `pytest`.
 - A top-level `make test` (or `scripts/test.sh`) chains all three so the whole suite runs from one command for the demo.
 
+## Consolidation status (branches)
+
+The competitive game + tests live on `test-containers` (team-owned: Mockito service/controller
+unit tests, Testcontainers integration, `SystemFlowTest`, broader frontend set, plus a
+session-isolation refactor in `f2703f4`). The **learning-progression feature** (investigation
+console + curriculum + training mode) was built on a *stack of feature branches*
+(`feat/investigation → feat/console → feat/progression`) off an **older** `test-containers`, and its
+tests were AI-drafted in a different style.
+
+**To consolidate**, the feature **production code** is brought onto current `test-containers`, and the
+feature's **tests are (re)written in the team's conventions** above (Mockito for services/controllers,
+Testcontainers for integration). A straight merge is avoided because (a) both sides changed the
+service layer (session-isolation vs diagnostics/progression) and (b) it would drag the AI-style tests
+in. See the consolidation plan agreed with the team.
+
+**Status — done on branch `consolidate` (off current `test-containers`), pending team review:**
+- Feature production code merged; the merge was clean apart from two test files (resolved). The
+  team's existing tests were kept as the baseline and the **AI-style feature tests were dropped**.
+- The team's tests were adapted to the new production signatures only (constructors now take
+  `ProgressionService`; `IncidentResponse` gained investigation fields) and to the learn-on-use
+  behaviour (`submitAction` now reads `player.getUser()`).
+- New **feature tests written in the team's style**: engine (plain JUnit/AssertJ —
+  `SymptomGroup/SkillTier/DiagnosticType/DiagnosticEvaluator/ConsoleRenderer`), services (Mockito —
+  `ProgressionServiceTest`, `IncidentServiceTest` +diagnostics/console, `SessionServiceTest`
+  +training), controllers (their `@WebMvcTest`/direct-unit split), and a Testcontainers
+  `DiagnosticConsoleIntegrationTest`.
+- **Result:** 302 tests green; overall instruction coverage **92.9%** (engine 98.7%, controllers
+  100%, `IncidentService` 90%).
+- **⚠ Needs team sign-off:** `SystemFlowTest`'s leak check was changed. The investigation board now
+  lists *candidate* causes by design, so the true cause shows as one option among several; the
+  assertion was updated to test the real invariant (no `rootCause` field is serialised; the decoy
+  candidate is shown alongside the true one) instead of banning the literal cause string.
+
 ## Open notes / decisions
+- **No Karate** — the API/system layer is `SystemFlowTest` (Testcontainers + `TestRestTemplate`).
 - **Testcontainers needs Docker** in whatever runs the tests (local + CI). GitHub runners have it.
 - Keep the existing **H2 test profile** only if we want ultra-fast local repo tests; otherwise
   retire it once Testcontainers MySQL is in, to avoid maintaining two DB behaviours.
