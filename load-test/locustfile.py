@@ -38,7 +38,7 @@ COMMANDS = [
 
 class TrainingPlayer(HttpUser):
     # Short think-time so 100 users produce real request volume. Lower it to push CPU harder.
-    wait_time = between(0.1, 0.5)
+    wait_time = between(0.05, 0.2)
 
     def on_start(self):
         """Log in as a fresh player and start a solo training game."""

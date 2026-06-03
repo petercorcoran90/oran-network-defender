@@ -45,3 +45,7 @@ locust -f load-test/locustfile.py --host http://localhost:8080 --headless -u 100
   (one replica, by design) and the **DB**, exactly as the architecture slide predicts. The
   documented next steps are server-sent events instead of polling, and sharding the simulator.
 - Tune load with `wait_time` in `locustfile.py` (lower = more requests/sec per user).
+- **Only scaling to 3–4 pods?** That's not a bug — the HPA settles where each pod sits near 70%,
+  so ~100% total CPU only needs ~3 pods. To reach the full 5, push more load: use **100 users**
+  and the current low `wait_time` (0.05–0.2). Verified: 100 users → ~120% CPU → **2 → 5 pods**.
+  On a very busy laptop you can also `docker compose stop` to free CPU for the cluster.
