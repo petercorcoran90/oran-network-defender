@@ -15,6 +15,7 @@ spec:
       containers:
         - name: backend
           image: oran-network-defender-backend:latest
+          imagePullPolicy: IfNotPresent   # use the locally-built image (no registry)
           ports:
             - containerPort: 8080
           envFrom:

@@ -18,6 +18,7 @@ spec:
       containers:
         - name: simulator
           image: oran-network-defender-simulator:latest
+          imagePullPolicy: IfNotPresent   # use the locally-built image (no registry)
           env:
             - name: BACKEND_URL
               value: "http://backend-service:8080"
