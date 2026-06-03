@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { Selectors as GameSelectors, statusOf } from './store.js';
 import { Icon, timeAgo, SevTag, StatusTag, NetworkMap, MapLegend, Topology, STATUS_COLOR } from './ui.jsx';
 
@@ -260,6 +261,13 @@ function metricRow(label, value, unit, max, invert) {
   );
 }
 
+// Deduction-board status for one candidate cause (flat, so it isn't a nested ternary).
+function candidateStatus(confirmed, out) {
+  if (confirmed) return { cls: 'good', label: 'confirmed' };
+  if (out) return { cls: 'muted', label: 'ruled out' };
+  return { cls: 'warn', label: 'possible' };
+}
+
 function IncidentDetail({ state, store, nav, route }) {
   const inc = state.incidents.find((i) => i.id === route.params.id);
   // Hooks must run on every render in the same order (rules of hooks), so they are all declared
@@ -274,11 +282,12 @@ function IncidentDetail({ state, store, nav, route }) {
   const [history, setHistory] = React.useState([]);
   const histRef = React.useRef(-1);
   const termRef = React.useRef(null);
+  const lineSeq = React.useRef(0); // stable, monotonic ids for terminal lines (so keys aren't the array index)
   React.useEffect(() => {
     if (!inc) return undefined;
     let active = true;
     setEvidence([]);
-    setLines([{ t: "Diagnostic console — type 'help' to list commands." }]);
+    setLines([{ id: lineSeq.current++, t: "Diagnostic console — type 'help' to list commands." }]);
     store.getDiagnostics(inc.id).then((list) => { if (active) setEvidence(list || []); }).catch(() => {});
     return () => { active = false; };
   }, [inc?.id]);
@@ -314,10 +323,10 @@ function IncidentDetail({ state, store, nav, route }) {
     if (!c) return;
     setCmd(''); histRef.current = -1;
     setHistory((h) => [...h, c]);
-    setLines((l) => [...l, { t: '$ ' + c, you: true }]);
+    setLines((l) => [...l, { id: lineSeq.current++, t: '$ ' + c, you: true }]);
     if (c.toLowerCase() === 'clear') { setLines([]); return; }
     const res = await store.runConsole(inc.id, c);
-    if (res && res.output) setLines((l) => [...l, { t: res.output }]);
+    if (res?.output) setLines((l) => [...l, { id: lineSeq.current++, t: res.output }]);
     store.getDiagnostics(inc.id).then((list) => setEvidence(list || [])).catch(() => {});
   }
   const ranNames = new Set(evidence.map((e) => e.diagnostic));
@@ -337,9 +346,9 @@ function IncidentDetail({ state, store, nav, route }) {
     }
   }
   const OUTCOME = {
-    SUCCESS: { cls: 'good', icon: 'check', text: 'Correct fix — incident resolved.' },
-    FAILED: { cls: 'crit', icon: 'x', text: 'Wrong action — it backfired, the incident failed and the fault spread.' },
-    PARTIAL: { cls: 'warn', icon: 'alert', text: 'No effect — that action does not fix this incident. Try another.' },
+    SUCCESS: { cls: 'good', icon: 'check', color: 'var(--good)', text: 'Correct fix — incident resolved.' },
+    FAILED: { cls: 'crit', icon: 'x', color: 'var(--crit)', text: 'Wrong action — it backfired, the incident failed and the fault spread.' },
+    PARTIAL: { cls: 'warn', icon: 'alert', color: 'var(--warn)', text: 'No effect — that action does not fix this incident. Try another.' },
   };
   return (
     <div className="fade-in">
@@ -350,7 +359,7 @@ function IncidentDetail({ state, store, nav, route }) {
 
       {outcome && (() => {
         const o = OUTCOME[outcome.result] || OUTCOME.PARTIAL;
-        const c = o.cls === 'good' ? 'var(--good)' : o.cls === 'crit' ? 'var(--crit)' : 'var(--warn)';
+        const c = o.color;
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--gap)', padding: '11px 14px',
             borderRadius: 'var(--r)', border: '1px solid ' + c, background: 'color-mix(in oklab,' + c + ' 12%, transparent)', color: c, fontSize: 13 }}>
@@ -390,10 +399,11 @@ function IncidentDetail({ state, store, nav, route }) {
               {candidates.map((c) => {
                 const confirmed = confirmedEv && c.cause === confirmedEv.implicated;
                 const out = !confirmedEv && eliminated.has(c.cause);
+                const st = candidateStatus(confirmed, out);
                 return (
                   <div key={c.cause} className="kv" style={{ alignItems: 'center', gap: 8, opacity: out ? 0.5 : 1 }}>
-                    <span className={'tag ' + (confirmed ? 'good' : out ? 'muted' : 'warn')} style={{ minWidth: 72, textAlign: 'center' }}>
-                      {confirmed ? 'confirmed' : out ? 'ruled out' : 'possible'}
+                    <span className={'tag ' + st.cls} style={{ minWidth: 72, textAlign: 'center' }}>
+                      {st.label}
                     </span>
                     <span style={{ textDecoration: out ? 'line-through' : 'none', color: 'var(--text-2)', fontSize: 13 }}>
                       {c.label} <span style={{ color: 'var(--text-3)' }}>→ fix: {actByName[c.action]?.name || c.action}</span>
@@ -421,8 +431,8 @@ function IncidentDetail({ state, store, nav, route }) {
             {/* Console — type authentic commands and read the output (buttons above are the easy mode). */}
             <div className="k" style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>Console</div>
             <div ref={termRef} style={{ background: 'var(--inset)', border: '1px solid var(--hair)', borderRadius: 'var(--r)', padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-2)', maxHeight: 180, overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-              {lines.map((ln, idx) => (
-                <div key={idx} style={{ color: ln.you ? 'var(--accent)' : 'var(--text-2)' }}>{ln.t}</div>
+              {lines.map((ln) => (
+                <div key={ln.id} style={{ color: ln.you ? 'var(--accent)' : 'var(--text-2)' }}>{ln.t}</div>
               ))}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, background: 'var(--inset)', border: '1px solid var(--hair)', borderRadius: 'var(--r)', padding: '7px 11px' }}>
@@ -489,9 +499,11 @@ function IncidentDetail({ state, store, nav, route }) {
       </div>
 
       {lesson && (
-        <div onClick={() => setLesson(null)}
+        <div role="button" tabIndex={0} aria-label="Dismiss"
+          onClick={(e) => { if (e.target === e.currentTarget) setLesson(null); }}
+          onKeyDown={(e) => { if (e.key === 'Escape') setLesson(null); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'grid', placeItems: 'center', zIndex: 50 }}>
-          <div onClick={(e) => e.stopPropagation()} className="panel panel-pad" style={{ maxWidth: 520, margin: 16 }}>
+          <div className="panel panel-pad" style={{ maxWidth: 520, margin: 16 }}>
             <h2 style={{ marginBottom: 8 }}>Command learned</h2>
             <div style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 14 }}>
               From now on you apply this fix in the console. Here's how an engineer does it:
@@ -503,8 +515,8 @@ function IncidentDetail({ state, store, nav, route }) {
             {lesson.diagnoseCommands && lesson.diagnoseCommands.length > 0 && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginBottom: 16 }}>
                 <div style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>Diagnose</div>
-                {lesson.diagnoseCommands.map((c, i) => (
-                  <div key={i} style={{ color: 'var(--text-2)' }}>$ {c}</div>
+                {lesson.diagnoseCommands.map((c) => (
+                  <div key={c} style={{ color: 'var(--text-2)' }}>$ {c}</div>
                 ))}
               </div>
             )}
@@ -515,6 +527,13 @@ function IncidentDetail({ state, store, nav, route }) {
     </div>
   );
 }
+
+IncidentDetail.propTypes = {
+  state: PropTypes.object.isRequired,
+  store: PropTypes.object.isRequired,
+  nav: PropTypes.func.isRequired,
+  route: PropTypes.object.isRequired,
+};
 
 // ============================================================
 // 5 · ACTIONS (remediation catalog + applied log)
@@ -583,6 +602,11 @@ function Actions({ state, store }) {
     </div>
   );
 }
+
+Actions.propTypes = {
+  state: PropTypes.object.isRequired,
+  store: PropTypes.object.isRequired,
+};
 
 // ============================================================
 // 6 · SCOREBOARD
