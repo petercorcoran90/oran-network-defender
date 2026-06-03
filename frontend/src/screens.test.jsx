@@ -91,38 +91,31 @@ describe('IncidentDetail action submission', () => {
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
   });
 
-  it('runs a diagnostic and shows the evidence', async () => {
+  it('runs a diagnostic through the console and records the evidence below it', async () => {
     const store = storeWith({
-      runDiagnostic: vi.fn().mockResolvedValue({
-        diagnostic: 'INSPECT_AUTOMATION', label: 'Inspect automation logs',
-        result: 'RULES_OUT', finding: 'Rogue automation — ruled out.',
-      }),
+      runConsole: vi.fn().mockResolvedValue({ recognised: true, output: 'idle since 10:05 (no recent changes)' }),
+      getDiagnostics: vi.fn()
+        .mockResolvedValueOnce([]) // initial load on mount
+        .mockResolvedValue([{ diagnostic: 'INSPECT_AUTOMATION', result: 'RULES_OUT', finding: 'Rogue automation — ruled out.' }]),
     });
     render(<IncidentDetail state={baseState} store={store} nav={() => {}} route={{ params: { id: 5 } }} />);
 
-    const diagBtn = await screen.findByRole('button', { name: /Inspect automation logs/ });
-    fireEvent.click(diagBtn);
+    const input = await screen.findByLabelText('diagnostic console');
+    fireEvent.change(input, { target: { value: 'kubectl logs deploy/traffic-steering' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(store.runDiagnostic).toHaveBeenCalledWith(5, 'INSPECT_AUTOMATION');
+    expect(store.runConsole).toHaveBeenCalledWith(5, 'kubectl logs deploy/traffic-steering');
+    // the evidence record under the console fills in from the refreshed getDiagnostics
     expect(await screen.findByText(/Rogue automation — ruled out/)).toBeInTheDocument();
   });
 
-  it('rules a candidate out, uses up the budget, and does NOT hand over the action', async () => {
-    const store = storeWith({
-      runDiagnostic: vi.fn().mockResolvedValue({
-        diagnostic: 'INSPECT_AUTOMATION', label: 'Inspect automation logs',
-        result: 'RULES_OUT', implicated: 'ROGUE_AUTOMATION', finding: 'Rogue automation — ruled out.',
-      }),
-    });
-    render(<IncidentDetail state={baseState} store={store} nav={() => {}} route={{ params: { id: 5 } }} />);
+  it('investigation is console-only — no diagnostic buttons and no candidate→fix board', () => {
+    render(<IncidentDetail state={baseState} store={storeWith()} nav={() => {}} route={{ params: { id: 5 } }} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: /Inspect automation logs/ }));
-
-    expect(await screen.findByText(/Rogue automation — ruled out/)).toBeInTheDocument();
-    expect(screen.getByText('ruled out')).toBeInTheDocument();          // board updated
-    expect(screen.queryByText(/Deduced — apply/)).toBeNull();           // no auto-answer
-    // budget is 1 — the test is now spent, so the diagnostic can't be run again.
-    expect(screen.getByRole('button', { name: /Inspect automation logs/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Inspect automation logs/ })).toBeNull(); // buttons gone
+    expect(screen.queryByText(/→ fix:/)).toBeNull();                                       // fixes never shown
+    expect(screen.queryByText('Rogue automation')).toBeNull();                             // candidate causes hidden
+    expect(screen.getByLabelText('diagnostic console')).toBeInTheDocument();               // you use the console instead
   });
 
   it('runs a console command and prints the emulated output', async () => {
@@ -154,11 +147,12 @@ describe('IncidentDetail action submission', () => {
     expect(screen.getByText(/rrmctl rebalance --cell o-ru-07/)).toBeInTheDocument();
   });
 
-  it('retires a learned action button — you apply it from the console', () => {
+  it('drops a learned action from the list — you apply it from the console', () => {
     const learnedState = { ...baseState, learnedActions: ['REBALANCE_TRAFFIC'] };
     render(<IncidentDetail state={learnedState} store={storeWith()} nav={() => {}} route={{ params: { id: 5 } }} />);
 
-    expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Apply' })).toBeNull();      // learned -> removed from the list
+    expect(screen.getByText(/learned every remediation/)).toBeInTheDocument();
   });
 });
 
