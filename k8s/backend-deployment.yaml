@@ -72,3 +72,18 @@ spec:
         target:
           type: Utilization
           averageUtilization: 70
+  # Tuned for a responsive, demonstrable autoscale: react quickly on the way up, and don't sit
+  # at the (default 5-min) plateau before scaling back down once load eases.
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 30
