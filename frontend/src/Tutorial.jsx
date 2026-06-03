@@ -120,7 +120,7 @@ const LESSONS = [
   },
 ];
 
-const norm = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+const norm = (s) => (s || '').trim().toLowerCase().replaceAll(/\s+/g, ' ');
 
 export default function Tutorial({ onExit }) {
   const [lessonIdx, setLessonIdx] = React.useState(0);
