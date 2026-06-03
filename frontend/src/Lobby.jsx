@@ -36,7 +36,7 @@ StatusTag.propTypes = {
   status: PropTypes.string.isRequired,
 };
 
-export default function Lobby({ onEnter }) {
+export default function Lobby({ onEnter, onTutorial }) {
   const [step, setStep] = useState('identify');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -193,6 +193,9 @@ export default function Lobby({ onEnter }) {
               <button className="btn ghost" disabled={busy} onClick={loadScores} style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}>
                 🏆 Top scorers
               </button>
+              <button className="btn ghost" onClick={onTutorial} style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}>
+                🎓 New here? Take the tutorial
+              </button>
             </>
           )}
 
@@ -337,4 +340,5 @@ export default function Lobby({ onEnter }) {
 
 Lobby.propTypes = {
   onEnter: PropTypes.func.isRequired,
+  onTutorial: PropTypes.func.isRequired,
 };
