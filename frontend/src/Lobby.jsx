@@ -204,6 +204,7 @@ export default function Lobby({ onEnter, onTutorial }) {
             <>
               <p style={{ color: 'var(--text-2)', marginTop: 0, fontSize: 12.5 }}>Top matches by winning score.</p>
               {scores.length === 0 ? <div className="empty">No completed matches yet.</div> : (
+                <div style={{ maxHeight: '52vh', overflowY: 'auto' }}>
                 <table>
                   <thead><tr><th>Player</th><th>Score</th><th>Difficulty</th><th>Length</th><th>Beat</th></tr></thead>
                   <tbody>
@@ -218,6 +219,7 @@ export default function Lobby({ onEnter, onTutorial }) {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
               <button className="btn ghost" onClick={() => setStep('identify')} style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}>Back</button>
             </>
@@ -272,7 +274,7 @@ export default function Lobby({ onEnter, onTutorial }) {
             <>
               <p style={{ color: 'var(--text-2)', marginTop: 0, fontSize: 12.5 }}>Open matches waiting for a second player:</p>
               {sessions.length === 0 && <div className="empty">No open matches. Go back and create one.</div>}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '52vh', overflowY: 'auto', paddingRight: 4 }}>
                 {sessions.map((s) => (
                   <div key={s.id} className="inc-mini" onClick={() => !busy && joinMatch(s)}>
                     <div className="inc-hdr">

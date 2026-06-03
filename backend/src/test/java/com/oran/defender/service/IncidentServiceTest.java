@@ -204,6 +204,28 @@ class IncidentServiceTest {
 
         assertThat(result.getId()).isEqualTo(500L);
         verify(scoreService).recordScoreEvent(eq(10L), eq(1L), any(), eq(50));
+        verify(progressionService).learnAction(any(), any()); // a correct fix earns the command
+    }
+
+    @Test
+    @DisplayName("a wrong/ineffective action is NOT learned — you only earn the command by getting it right")
+    void submitAction_wrongActionNotLearned() {
+        PlayerAction saved = new PlayerAction();
+        saved.setId(501L);
+
+        when(incidentRepository.findById(200L)).thenReturn(Optional.of(incident));
+        when(playerRepository.findById(10L)).thenReturn(Optional.of(player));
+        when(actionRepository.findById(300L)).thenReturn(Optional.of(action));
+        when(incidentEvaluator.evaluate(any(), any())).thenReturn(EvaluationResult.INEFFECTIVE);
+        when(scoreCalculator.pointsFor(any(), any(long.class), any())).thenReturn(-15);
+        when(playerActionRepository.save(any())).thenReturn(saved);
+        when(incidentRepository.save(any())).thenReturn(incident);
+
+        PlayerAction result = incidentService.submitAction(1L, 200L, 10L, 300L);
+
+        assertThat(result.isNewlyLearnedAction()).isFalse();
+        verify(progressionService, never()).learnAction(any(), any());
+        verify(progressionService, never()).hasLearnedAction(any(), any());
     }
 
     @Test

@@ -42,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 class SubmitActionIntegrationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired private IncidentService incidentService;
+    @Autowired private com.oran.defender.service.ProgressionService progression;
     @Autowired private AppUserRepository users;
     @Autowired private GameSessionRepository sessions;
     @Autowired private PlayerRepository players;
@@ -80,6 +81,10 @@ class SubmitActionIntegrationTest extends AbstractMySqlIntegrationTest {
         Player reloaded = players.findById(player.getId()).orElseThrow();
         assertThat(reloaded.getScore()).isEqualTo(result.getPointsAwarded());
         assertThat(scoreEvents.findByPlayerIdOrderByCreatedAtDesc(player.getId())).hasSize(1);
+
+        // Getting it right earns the command.
+        assertThat(progression.hasLearnedAction(user.getId(), com.oran.defender.engine.ActionType.REBALANCE_TRAFFIC))
+                .isTrue();
     }
 
     @Test
@@ -113,6 +118,10 @@ class SubmitActionIntegrationTest extends AbstractMySqlIntegrationTest {
                 .allSatisfy(i -> assertThat(i.getRootCause()).isEqualTo("CELL_OVERLOAD"));
 
         assertThat(players.findById(player.getId()).orElseThrow().getScore()).isNegative();
+
+        // A wrong (trap) action teaches nothing — you don't earn the command by getting it wrong.
+        assertThat(progression.hasLearnedAction(user.getId(), com.oran.defender.engine.ActionType.RESTART_CELL))
+                .isFalse();
     }
 
     @Test
