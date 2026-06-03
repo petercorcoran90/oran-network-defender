@@ -94,3 +94,13 @@ All headers are set in `frontend/nginx.conf`. Re-scan: **0 FAIL**, 63 passing ru
   `data:` resources and isn't needed for this app's threat model; COOP + CORP are set instead.
 - **Storable/Cacheable content** and **"Modern Web Application"** — informational (caching static
   assets is intended; the second is just ZAP detecting an SPA).
+
+## Diagnostic console (looks like a shell, isn't one)
+
+The investigation console is a **pure emulator** — a safety-relevant design point:
+- Typed commands are **never executed**. There is no shell, `eval`, process or filesystem access.
+- The server matches input against a **whitelist** of known commands and returns generated text;
+  anything else returns "command not found". Input is length-bounded (`@Size(max=200)`) and the raw
+  string is never passed to any interpreter → no command injection / RCE despite the terminal look.
+- Console commands run under the same ownership/state guards as other player actions (your own
+  OPEN incident in an ACTIVE session), and the emulated output never contains the hidden root cause.

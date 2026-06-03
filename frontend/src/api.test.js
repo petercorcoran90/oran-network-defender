@@ -46,6 +46,45 @@ describe('Api client', () => {
     expect(JSON.parse(opts.body)).toEqual({ username: 'ava' });
   });
 
+  it('runDiagnostic POSTs the diagnostic to the incident', async () => {
+    await Api.runDiagnostic(1, 3, 2, 'TRACE_TRANSPORT');
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toBe('/api/sessions/1/incidents/3/diagnostics');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual({ playerId: 2, diagnostic: 'TRACE_TRANSPORT' });
+  });
+
+  it('getDiagnostics builds the URL with playerId', async () => {
+    await Api.getDiagnostics(1, 3, 2);
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/sessions/1/incidents/3/diagnostics?playerId=2', expect.anything());
+  });
+
+  it('getUserSkills fetches the player progression', async () => {
+    await Api.getUserSkills(7);
+    expect(fetch).toHaveBeenCalledWith('/api/users/7/skills', expect.anything());
+  });
+
+  it('getManual fetches the field manual', async () => {
+    await Api.getManual(7);
+    expect(fetch).toHaveBeenCalledWith('/api/users/7/manual', expect.anything());
+  });
+
+  it('startTraining POSTs to the training endpoint', async () => {
+    await Api.startTraining(7, 600);
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toBe('/api/sessions/training');
+    expect(JSON.parse(opts.body)).toEqual({ userId: 7, durationSeconds: 600 });
+  });
+
+  it('runConsole POSTs the command to the incident', async () => {
+    await Api.runConsole(1, 3, 2, 'traceroute o-ru');
+    const [url, opts] = fetch.mock.calls[0];
+    expect(url).toBe('/api/sessions/1/incidents/3/console');
+    expect(opts.method).toBe('POST');
+    expect(JSON.parse(opts.body)).toEqual({ playerId: 2, command: 'traceroute o-ru' });
+  });
+
   it('throws ApiError carrying the backend status and message on a non-ok response', async () => {
     fetch.mockResolvedValue(response({
       ok: false, status: 400,

@@ -25,6 +25,7 @@ public class SessionService {
     static final int MAX_PLAYERS = 2;
 
     private static final String SESSION_NOT_FOUND = "Session not found";
+    private static final String USER_NOT_FOUND = "User not found";
 
     private static final int DEFAULT_DURATION_SECONDS = 300;
     // Ambiguous characters (0/O, 1/I) omitted so codes are easy to read out loud.
@@ -35,22 +36,67 @@ public class SessionService {
     private final PlayerRepository playerRepository;
     private final AppUserRepository userRepository;
     private final MatchResultRepository matchResultRepository;
+    private final ProgressionService progressionService;
     private final SecureRandom random = new SecureRandom();
 
     public SessionService(GameSessionRepository sessionRepository,
                           PlayerRepository playerRepository,
                           AppUserRepository userRepository,
-                          MatchResultRepository matchResultRepository) {
+                          MatchResultRepository matchResultRepository,
+                          ProgressionService progressionService) {
         this.sessionRepository = sessionRepository;
         this.playerRepository = playerRepository;
         this.userRepository = userRepository;
         this.matchResultRepository = matchResultRepository;
+        this.progressionService = progressionService;
+    }
+
+    /**
+     * Solo Training mode: one player, no opponent, activates immediately. The difficulty is set
+     * from the player's current tier (Trainee→EASY, Operator→MEDIUM, Engineer→HARD) so the session
+     * is sized to their skill — they ramp up across sessions as they learn.
+     */
+    @Transactional
+    public Player createTrainingSession(Long userId, Integer durationSeconds) {
+        AppUser user = userRepository.findById(userId)
+                .orElseThrow(() -> new NotFoundException(USER_NOT_FOUND));
+        var tier = com.oran.defender.engine.SkillTier.of(progressionService.getOrCreate(userId).learnedCount());
+
+        GameSession session = new GameSession();
+        session.setName(user.getUsername() + " — training");
+        session.setSessionCode(generateUniqueCode());
+        session.setCreatedByUser(user);
+        session.setMode(GameSession.Mode.TRAINING);
+        session.setStatus(SessionStatus.WAITING);
+        session.setDurationSeconds(durationSeconds != null ? durationSeconds : DEFAULT_DURATION_SECONDS);
+        session.setDifficulty(difficultyForTier(tier));
+        sessionRepository.save(session);
+
+        Player player = new Player();
+        player.setUser(user);
+        player.setGameSession(session);
+        player.setTeamName(user.getUsername());
+        player.setScore(0);
+        player.setReady(true);
+        player = playerRepository.save(player);
+
+        transitionToActive(session);     // no second player / ready-check — start now
+        sessionRepository.save(session);
+        return player;
+    }
+
+    private GameSession.Difficulty difficultyForTier(com.oran.defender.engine.SkillTier tier) {
+        return switch (tier) {
+            case TRAINEE -> GameSession.Difficulty.EASY;
+            case OPERATOR -> GameSession.Difficulty.MEDIUM;
+            case ENGINEER -> GameSession.Difficulty.HARD;
+        };
     }
 
     @Transactional
     public GameSession createSession(String name, Long createdByUserId, Integer durationSeconds, String difficulty) {
         AppUser creator = userRepository.findById(createdByUserId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException(USER_NOT_FOUND));
         GameSession session = new GameSession();
         session.setName(name);
         session.setSessionCode(generateUniqueCode());
@@ -105,7 +151,7 @@ public class SessionService {
             throw new ConflictException("Session is not accepting players");
         }
         AppUser user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException(USER_NOT_FOUND));
         playerRepository.findByUserIdAndGameSessionId(userId, sessionId).ifPresent(existing -> {
             throw new ConflictException("User has already joined this session");
         });

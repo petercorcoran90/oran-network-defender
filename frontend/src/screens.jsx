@@ -1,4 +1,5 @@
 import React from 'react';
+import PropTypes from 'prop-types';
 import { Selectors as GameSelectors, statusOf } from './store.js';
 import { Icon, timeAgo, SevTag, StatusTag, NetworkMap, MapLegend, Topology, STATUS_COLOR } from './ui.jsx';
 
@@ -260,24 +261,99 @@ function metricRow(label, value, unit, max, invert) {
   );
 }
 
+// Deduction-board status for one candidate cause (flat, so it isn't a nested ternary).
+function candidateStatus(confirmed, out) {
+  if (confirmed) return { cls: 'good', label: 'confirmed' };
+  if (out) return { cls: 'muted', label: 'ruled out' };
+  return { cls: 'warn', label: 'possible' };
+}
+
 function IncidentDetail({ state, store, nav, route }) {
   const inc = state.incidents.find((i) => i.id === route.params.id);
+  // Hooks must run on every render in the same order (rules of hooks), so they are all declared
+  // up front — never after the "incident not found" early-return guard, which lives below them.
+  const [flash, setFlash] = React.useState(null);
+  const [outcome, setOutcome] = React.useState(null);
+  const [lesson, setLesson] = React.useState(null);
+  const [evidence, setEvidence] = React.useState([]);
+  const [running, setRunning] = React.useState(null);
+  const [lines, setLines] = React.useState([]);
+  const [cmd, setCmd] = React.useState('');
+  const [history, setHistory] = React.useState([]);
+  const histRef = React.useRef(-1);
+  const termRef = React.useRef(null);
+  const lineSeq = React.useRef(0); // stable, monotonic ids for terminal lines (so keys aren't the array index)
+  React.useEffect(() => {
+    if (!inc) return undefined;
+    let active = true;
+    setEvidence([]);
+    setLines([{ id: lineSeq.current++, t: "Diagnostic console — type 'help' to list commands." }]);
+    store.getDiagnostics(inc.id).then((list) => { if (active) setEvidence(list || []); }).catch(() => {});
+    return () => { active = false; };
+  }, [inc?.id]);
+  React.useEffect(() => {
+    if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
+  }, [lines]);
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') setLesson(null); };
+    globalThis.addEventListener('keydown', onKey);
+    return () => globalThis.removeEventListener('keydown', onKey);
+  }, []);
+
   if (!inc) return <div className="empty">Incident not found. <span className="link" onClick={() => nav('incidents')}>Back to list</span></div>;
   const cell = state.cells.find((c) => c.id === inc.cellId);
   const closed = inc.status !== 'open'; // resolved OR failed — no more actions either way
   const failed = inc.status === 'failed';
   const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
-  const [flash, setFlash] = React.useState(null);
-  const [outcome, setOutcome] = React.useState(null);
+  const learnedActions = new Set(state.learnedActions || []);
+  async function investigate(name) {
+    setRunning(name);
+    const ev = await store.runDiagnostic(inc.id, name);
+    if (ev) setEvidence((prev) => (prev.some((e) => e.diagnostic === ev.diagnostic) ? prev : [...prev, ev]));
+    setRunning(null);
+  }
+  async function onConsoleKey(e) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (history.length) { histRef.current = Math.max(0, (histRef.current < 0 ? history.length : histRef.current) - 1); setCmd(history[histRef.current] || ''); }
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (histRef.current >= 0) { histRef.current = Math.min(history.length, histRef.current + 1); setCmd(history[histRef.current] || ''); }
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    const c = cmd.trim();
+    if (!c) return;
+    setCmd(''); histRef.current = -1;
+    setHistory((h) => [...h, c]);
+    setLines((l) => [...l, { id: lineSeq.current++, t: '$ ' + c, you: true }]);
+    if (c.toLowerCase() === 'clear') { setLines([]); return; }
+    const res = await store.runConsole(inc.id, c);
+    if (res?.output) setLines((l) => [...l, { id: lineSeq.current++, t: res.output }]);
+    store.getDiagnostics(inc.id).then((list) => setEvidence(list || [])).catch(() => {});
+  }
+  const ranNames = new Set(evidence.map((e) => e.diagnostic));
+  // Deduction board: candidates, narrowed by the (budget-limited) evidence gathered so far.
+  const candidates = inc.candidates || [];
+  const confirmedEv = evidence.find((e) => e.result === 'CONFIRMS');
+  const eliminated = new Set(evidence.filter((e) => e.result === 'RULES_OUT').map((e) => e.implicated));
+  const actByName = Object.fromEntries(Object.values(store.ACTIONS).map((a) => [a.actionName, a]));
+  const budget = inc.diagnosticBudget || 0;
+  const budgetUsed = evidence.length >= budget;
   async function apply(aid) {
     setFlash(aid);
     const res = await store.applyAction(inc.id, aid);
-    if (res) setOutcome(res);
+    if (res) {
+      setOutcome(res);
+      if (res.justLearned) setLesson(res); // first time using this action -> teach the CLI
+    }
   }
   const OUTCOME = {
-    SUCCESS: { cls: 'good', icon: 'check', text: 'Correct fix — incident resolved.' },
-    FAILED: { cls: 'crit', icon: 'x', text: 'Wrong action — it backfired, the incident failed and the fault spread.' },
-    PARTIAL: { cls: 'warn', icon: 'alert', text: 'No effect — that action does not fix this incident. Try another.' },
+    SUCCESS: { cls: 'good', icon: 'check', color: 'var(--good)', text: 'Correct fix — incident resolved.' },
+    FAILED: { cls: 'crit', icon: 'x', color: 'var(--crit)', text: 'Wrong action — it backfired, the incident failed and the fault spread.' },
+    PARTIAL: { cls: 'warn', icon: 'alert', color: 'var(--warn)', text: 'No effect — that action does not fix this incident. Try another.' },
   };
   return (
     <div className="fade-in">
@@ -288,7 +364,7 @@ function IncidentDetail({ state, store, nav, route }) {
 
       {outcome && (() => {
         const o = OUTCOME[outcome.result] || OUTCOME.PARTIAL;
-        const c = o.cls === 'good' ? 'var(--good)' : o.cls === 'crit' ? 'var(--crit)' : 'var(--warn)';
+        const c = o.color;
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--gap)', padding: '11px 14px',
             borderRadius: 'var(--r)', border: '1px solid ' + c, background: 'color-mix(in oklab,' + c + ' 12%, transparent)', color: c, fontSize: 13 }}>
@@ -310,6 +386,80 @@ function IncidentDetail({ state, store, nav, route }) {
           {failed && <span className="tag crit" style={{ fontSize: 12, padding: '6px 12px' }}><Icon name="x" size={13} /> Failed — wrong action</span>}
         </div>
       </div>
+
+      {(inc.diagnostics && inc.diagnostics.length > 0) && (
+        <div className="panel" style={{ marginBottom: 'var(--gap)' }}>
+          <div className="panel-head">
+            <h2>Investigation</h2>
+            <span className="corner">{inc.symptomGroup || 'Symptom'} · {evidence.length}/{budget} tests used</span>
+          </div>
+          <div className="panel-pad">
+            <div style={{ color: 'var(--text-3)', fontSize: 12.5, marginBottom: 12 }}>
+              You can run only {budget} test{budget === 1 ? '' : 's'} here, and each costs points — so you can't
+              check everything. Rule out what you can, then decide which cause it is and apply its fix.
+            </div>
+
+            {/* Deduction board: each possible cause + its fix, narrowed by the evidence so far. */}
+            <div style={{ marginBottom: 12 }}>
+              {candidates.map((c) => {
+                const confirmed = confirmedEv && c.cause === confirmedEv.implicated;
+                const out = !confirmedEv && eliminated.has(c.cause);
+                const st = candidateStatus(confirmed, out);
+                return (
+                  <div key={c.cause} className="kv" style={{ alignItems: 'center', gap: 8, opacity: out ? 0.5 : 1 }}>
+                    <span className={'tag ' + st.cls} style={{ minWidth: 72, textAlign: 'center' }}>
+                      {st.label}
+                    </span>
+                    <span style={{ textDecoration: out ? 'line-through' : 'none', color: 'var(--text-2)', fontSize: 13 }}>
+                      {c.label} <span style={{ color: 'var(--text-3)' }}>→ fix: {actByName[c.action]?.name || c.action}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: evidence.length ? 12 : 0 }}>
+              {inc.diagnostics.map((d) => (
+                <button key={d.name} className="btn"
+                  disabled={closed || ranNames.has(d.name) || running === d.name || (budgetUsed && !ranNames.has(d.name))}
+                  onClick={() => investigate(d.name)}>
+                  <Icon name="search" size={13} /> {d.label}{ranNames.has(d.name) ? ' ✓' : ''}
+                </button>
+              ))}
+            </div>
+            {budgetUsed && !closed && (
+              <div style={{ color: 'var(--text-3)', fontSize: 12, marginBottom: 12 }}>
+                No tests left — make your call from the evidence above.
+              </div>
+            )}
+
+            {/* Console — type authentic commands and read the output (buttons above are the easy mode). */}
+            <div className="k" style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6 }}>Console</div>
+            <div ref={termRef} style={{ background: 'var(--inset)', border: '1px solid var(--hair)', borderRadius: 'var(--r)', padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-2)', maxHeight: 180, overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+              {lines.map((ln) => (
+                <div key={ln.id} style={{ color: ln.you ? 'var(--accent)' : 'var(--text-2)' }}>{ln.t}</div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, background: 'var(--inset)', border: '1px solid var(--hair)', borderRadius: 'var(--r)', padding: '7px 11px' }}>
+              <span style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>$</span>
+              <input value={cmd} disabled={closed} onChange={(e) => setCmd(e.target.value)} onKeyDown={onConsoleKey}
+                placeholder="type a command — e.g. traceroute o-ru   (try 'help')"
+                aria-label="diagnostic console"
+                style={{ flex: 1, background: 'none', border: 'none', color: 'var(--text)', outline: 'none', fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+            </div>
+            <div style={{ height: 12 }} />
+
+            {evidence.map((e) => (
+              <div key={e.diagnostic} className="kv" style={{ alignItems: 'center', gap: 8 }}>
+                <span className={'tag ' + (e.result === 'CONFIRMS' ? 'good' : 'muted')}>
+                  {e.result === 'CONFIRMS' ? 'confirms' : 'rules out'}
+                </span>
+                <span className="v" style={{ color: 'var(--text-2)', fontSize: 12.5 }}>{e.finding}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="detail-grid">
         <div className="panel">
@@ -337,72 +487,128 @@ function IncidentDetail({ state, store, nav, route }) {
           <div>
             {catalog.map((aid) => {
               const a = store.ACTIONS[aid];
-              const rec = inc.rec.includes(aid);
+              const learned = learnedActions.has(a.actionName); // learned -> button retires, use the console
               return (
                 <div key={aid} className={'action-row' + (flash === aid ? ' flash' : '')}>
                   <span className="action-ic"><Icon name={a.icon} size={17} /></span>
                   <div style={{ flex: 1 }}>
-                    <div className="at">{a.name}{rec && <span className="pts-pill">★ recommended</span>}</div>
-                    <div className="ad">{a.desc}</div>
+                    <div className="at">{a.name}{learned && <span className="pts-pill">✓ learned</span>}</div>
+                    <div className="ad">{learned ? 'You know this one — apply it from the console.' : a.desc}</div>
                   </div>
-                  <button className={'btn' + (rec && !closed ? ' primary' : '')} disabled={closed} onClick={() => apply(aid)}>Apply</button>
+                  <button className="btn" disabled={closed || learned} onClick={() => apply(aid)}>Apply</button>
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {lesson && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'grid', placeItems: 'center', zIndex: 50 }}>
+          <div className="panel panel-pad" style={{ maxWidth: 520, margin: 16 }}>
+            <h2 style={{ marginBottom: 8 }}>Command learned</h2>
+            <div style={{ color: 'var(--text-3)', fontSize: 13, marginBottom: 14 }}>
+              From now on you apply this fix in the console. Here's how an engineer does it:
+            </div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginBottom: 12 }}>
+              <div style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>Fix</div>
+              <div style={{ color: 'var(--accent)' }}>$ {lesson.actionCommand}</div>
+            </div>
+            {lesson.diagnoseCommands && lesson.diagnoseCommands.length > 0 && (
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, marginBottom: 16 }}>
+                <div style={{ color: 'var(--text-3)', fontSize: 10.5, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 4 }}>Diagnose</div>
+                {lesson.diagnoseCommands.map((c) => (
+                  <div key={c} style={{ color: 'var(--text-2)' }}>$ {c}</div>
+                ))}
+              </div>
+            )}
+            <button className="btn primary" onClick={() => setLesson(null)}>Got it</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+IncidentDetail.propTypes = {
+  state: PropTypes.object.isRequired,
+  store: PropTypes.object.isRequired,
+  nav: PropTypes.func.isRequired,
+  route: PropTypes.object.isRequired,
+};
+
 // ============================================================
 // 5 · ACTIONS (remediation catalog + applied log)
 // ============================================================
-function Actions({ state, store, nav }) {
-  const open = GameSelectors.activeIncidents(state);
+// The field manual — fills in with the commands the player has learned (server-filtered).
+function Actions({ state, store }) {
+  const [manual, setManual] = React.useState(null);
+  React.useEffect(() => {
+    let active = true;
+    store.getManual().then((m) => { if (active) setManual(m); }).catch(() => {});
+    return () => { active = false; };
+  }, [state.version]); // re-fetch as the player learns more during the match
   const applied = state.activity.filter((a) => a.kind === 'apply');
+  const diags = manual ? manual.diagnostics : [];
+  const acts = manual ? manual.actions : [];
+  const learned = diags.length + acts.length;
+  const total = manual ? manual.diagnosticsTotal + manual.actionsTotal : 0;
   return (
     <div className="fade-in">
-      <div className="page-head"><div><h1>Action Center</h1><div className="sub">Remediation playbook · apply the right fix to score points</div></div></div>
-
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: 'var(--gap)' }}>
-        {Object.values(store.ACTIONS).map((a) => (
-          <div key={a.id} className="panel panel-pad" style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <span className="action-ic" style={{ width: 42, height: 42 }}><Icon name={a.icon} size={20} /></span>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontFamily: 'var(--font-head)', fontWeight: 600, fontSize: 15 }}>{a.name}</span>
-              </div>
-              <div style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 4 }}>{a.desc}</div>
-            </div>
-          </div>
-        ))}
+      <div className="page-head">
+        <div><h1>Field Manual</h1><div className="sub">Commands you've learned{manual ? ` · ${manual.tier}` : ''}</div></div>
+        {manual && <div className="seg"><button className="on">{learned}/{total} learned</button></div>}
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <div className="panel">
-          <div className="panel-head"><h2>Awaiting Action</h2><span className="corner">{open.length} open</span></div>
-          <div className="panel-pad"><ActiveIncidents state={state} nav={nav} limit={8} /></div>
+          <div className="panel-head"><h2>Diagnostics</h2><span className="corner">{diags.length}/{manual ? manual.diagnosticsTotal : '–'}</span></div>
+          <div className="panel-pad">
+            {diags.length === 0 ? <div className="empty">Run diagnostics on incidents to learn them.</div> :
+              diags.map((d) => (
+                <div key={d.name} style={{ marginBottom: 12 }}>
+                  <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontSize: 12.5 }}>$ {d.command}</div>
+                  <div style={{ color: 'var(--text-3)', fontSize: 12 }}>{d.investigates}</div>
+                </div>
+              ))}
+          </div>
         </div>
         <div className="panel">
-          <div className="panel-head"><h2>Recently Applied</h2></div>
-          <div className="panel-pad" style={{ paddingTop: 4, paddingBottom: 4 }}>
-            {applied.length === 0 ? <div className="empty">No actions applied yet.</div> :
-              applied.slice(0, 8).map((a) => (
-                <div key={a.id} className="feed-row">
-                  <span className="when">{timeAgo(a.when)}</span>
-                  <span className="feed-icn" style={{ background: 'color-mix(in oklab,var(--good) 16%,transparent)', color: 'var(--good)' }}><Icon name="check" size={13} /></span>
-                  <span className="body">{a.text}</span>
-                  <span className="pts pos">+{a.points}</span>
+          <div className="panel-head"><h2>Fixes</h2><span className="corner">{acts.length}/{manual ? manual.actionsTotal : '–'}</span></div>
+          <div className="panel-pad">
+            {acts.length === 0 ? <div className="empty">Apply remediations to learn their commands.</div> :
+              acts.map((a) => (
+                <div key={a.name} style={{ marginBottom: 12 }}>
+                  <div style={{ fontFamily: 'var(--font-head)', fontWeight: 600, fontSize: 13 }}>{a.label}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontSize: 12.5 }}>$ {a.command}</div>
                 </div>
               ))}
           </div>
         </div>
       </div>
+
+      <div className="panel" style={{ marginTop: 'var(--gap)' }}>
+        <div className="panel-head"><h2>Recently Applied</h2></div>
+        <div className="panel-pad" style={{ paddingTop: 4, paddingBottom: 4 }}>
+          {applied.length === 0 ? <div className="empty">No actions applied yet.</div> :
+            applied.slice(0, 8).map((a) => (
+              <div key={a.id} className="feed-row">
+                <span className="when">{timeAgo(a.when)}</span>
+                <span className="feed-icn" style={{ background: 'color-mix(in oklab,var(--good) 16%,transparent)', color: 'var(--good)' }}><Icon name="check" size={13} /></span>
+                <span className="body">{a.text}</span>
+                <span className="pts pos">+{a.points}</span>
+              </div>
+            ))}
+        </div>
+      </div>
     </div>
   );
 }
+
+Actions.propTypes = {
+  state: PropTypes.object.isRequired,
+  store: PropTypes.object.isRequired,
+};
 
 // ============================================================
 // 6 · SCOREBOARD

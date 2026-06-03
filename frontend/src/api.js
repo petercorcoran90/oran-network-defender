@@ -44,10 +44,14 @@ export const Api = {
     request('/users', { method: 'POST', body: { username, role } }),
   login: (username) => request('/users/login', { method: 'POST', body: { username } }),
   getUser: (id) => request(`/users/${id}`),
+  getUserSkills: (id) => request(`/users/${id}/skills`),
+  getManual: (id) => request(`/users/${id}/manual`),
 
   // --- sessions ---
   createSession: (name, createdByUserId, durationSeconds, difficulty) =>
     request('/sessions', { method: 'POST', body: { name, createdByUserId, durationSeconds, difficulty } }),
+  startTraining: (userId, durationSeconds) =>
+    request('/sessions/training', { method: 'POST', body: { userId, durationSeconds } }),
   listSessions: () => request('/sessions'),
   getSession: (id) => request(`/sessions/${id}`),
   getSessionByCode: (code) => request(`/sessions/code/${encodeURIComponent(code)}`),
@@ -78,6 +82,16 @@ export const Api = {
       { method: 'POST', body: { playerId, actionId } }),
   getIncidentActions: (sessionId, incidentId) =>
     request(`/sessions/${sessionId}/incidents/${incidentId}/actions`),
+
+  // --- diagnostics (investigation) ---
+  runDiagnostic: (sessionId, incidentId, playerId, diagnostic) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}/diagnostics`,
+      { method: 'POST', body: { playerId, diagnostic } }),
+  getDiagnostics: (sessionId, incidentId, playerId) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}/diagnostics?playerId=${playerId}`),
+  runConsole: (sessionId, incidentId, playerId, command) =>
+    request(`/sessions/${sessionId}/incidents/${incidentId}/console`,
+      { method: 'POST', body: { playerId, command } }),
 
   // --- scores ---
   getScoreboard: (sessionId) => request(`/sessions/${sessionId}/scores`),

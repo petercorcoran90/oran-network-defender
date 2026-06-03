@@ -41,31 +41,58 @@ INITIAL_INCIDENTS = int(os.environ.get("INITIAL_INCIDENTS", "2"))
 # skilled player who clears incidents quickly from running out of things to do.
 REFILL_PER_TICK = int(os.environ.get("REFILL_PER_TICK", "3"))
 
-# rootCause -> how it presents. rootCause values must match the backend RootCause enum.
-ARCHETYPES = {
-    "CELL_OVERLOAD":          {"type": "Cell Overload",          "severity": "HIGH",   "health": "CRITICAL", "metrics": {"userLoad": 95, "latency": 180}},
-    "NEIGHBOUR_CONFIG_CHANGE":{"type": "Config Drift",           "severity": "MEDIUM", "health": "WARNING",  "metrics": {"packetLoss": 14, "latency": 70}, "config": "CHANGED"},
-    "TRANSPORT_LINK_FAULT":   {"type": "Transport Link Fault",   "severity": "HIGH",   "health": "CRITICAL", "metrics": {"packetLoss": 22, "latency": 140}},
-    "ALARM_STORM":            {"type": "Alarm Storm",            "severity": "HIGH",   "health": "WARNING",  "metrics": {"alarmCount": 12}},
-    "NEIGHBOUR_INTERFERENCE": {"type": "Neighbour Interference", "severity": "MEDIUM", "health": "WARNING",  "metrics": {"signalQuality": 55}},
-    "SOFTWARE_UPGRADE_FAULT": {"type": "Software Upgrade Fault", "severity": "MEDIUM", "health": "WARNING",  "metrics": {"packetLoss": 9}, "config": "DRIFT"},
-    "ROGUE_AUTOMATION":       {"type": "Rogue Automation",       "severity": "MEDIUM", "health": "WARNING",  "metrics": {"userLoad": 80, "latency": 120}, "config": "DRIFT"},
-    "FALSE_ALARM":            {"type": "Suspected False Alarm",  "severity": "LOW",    "health": "GOOD",     "metrics": {"alarmCount": 1}},
-}
-DESCRIPTIONS = {
-    "CELL_OVERLOAD": "User load and latency are climbing past safe thresholds on this cell.",
-    "NEIGHBOUR_CONFIG_CHANGE": "Packet loss is rising after a neighbouring cell's configuration changed.",
-    "TRANSPORT_LINK_FAULT": "Intermittent transport link is dropping packets and adding latency.",
-    "ALARM_STORM": "A burst of alarms is masking the underlying fault on this cell.",
-    "NEIGHBOUR_INTERFERENCE": "Signal quality has dropped — likely interference from an adjacent cell.",
-    "SOFTWARE_UPGRADE_FAULT": "Packet loss appeared right after a software upgrade window.",
-    "ROGUE_AUTOMATION": "An automation loop is making changes that keep degrading this cell.",
-    "FALSE_ALARM": "An alert fired but this cell's metrics look healthy.",
+# Each incident PRESENTS as an ambiguous symptom group: several root causes share the exact same
+# visible card (label / severity / description / symptom metrics), so a player can't read the fix
+# off the symptom and must investigate (run diagnostics) to tell them apart. The hidden root cause
+# — one of the group's `causes` — still decides correctness server-side. The group membership MUST
+# match the backend SymptomGroup enum.
+SYMPTOM_GROUPS = {
+    "CONGESTION": {
+        "label": "Congestion",
+        "severity": "HIGH",
+        "health": "CRITICAL",
+        "config": "STABLE",
+        "description": "User load and latency are elevated on this cell. More than one fault could "
+                       "explain it — investigate before choosing a remediation.",
+        "metrics": {"userLoad": 92, "latency": 160, "signalQuality": 80},
+        "causes": ["CELL_OVERLOAD", "ROGUE_AUTOMATION"],
+    },
+    "SERVICE_DEGRADATION": {
+        "label": "Service degradation",
+        "severity": "HIGH",
+        "health": "CRITICAL",
+        "config": "STABLE",
+        "description": "Raised latency and packet loss with patchy signal. The cause is unclear — "
+                       "investigate to confirm it before acting.",
+        "metrics": {"latency": 135, "packetLoss": 16, "signalQuality": 66},
+        "causes": ["TRANSPORT_LINK_FAULT", "NEIGHBOUR_CONFIG_CHANGE",
+                   "SOFTWARE_UPGRADE_FAULT", "NEIGHBOUR_INTERFERENCE"],
+    },
+    "ALARMS": {
+        "label": "Alarm activity",
+        "severity": "MEDIUM",
+        "health": "WARNING",
+        "config": "STABLE",
+        "description": "A burst of alarms is firing. It may be masking a real fault, or it may be "
+                       "noise — investigate before deciding what to do.",
+        "metrics": {"alarmCount": 10, "latency": 60},
+        "causes": ["ALARM_STORM", "FALSE_ALARM"],
+    },
 }
 
-# Difficulty pools: easier root causes early; the full set (incl. HIGH severity) later.
-EARLY_KEYS = [k for k, v in ARCHETYPES.items() if v["severity"] in ("LOW", "MEDIUM")]
-ALL_KEYS = list(ARCHETYPES)
+# root cause -> its symptom group key
+ROOT_TO_GROUP = {rc: g for g, spec in SYMPTOM_GROUPS.items() for rc in spec["causes"]}
+ALL_KEYS = list(ROOT_TO_GROUP)
+
+# Difficulty ramp by ambiguity: the 2-candidate groups open the match; the harder 4-candidate
+# SERVICE_DEGRADATION group joins later.
+EARLY_GROUPS = ["CONGESTION", "ALARMS"]
+EARLY_KEYS = [rc for g in EARLY_GROUPS for rc in SYMPTOM_GROUPS[g]["causes"]]
+
+
+def present(root_cause):
+    """The ambiguous card a root cause presents as — shared by every cause in its group."""
+    return SYMPTOM_GROUPS[ROOT_TO_GROUP[root_cause]]
 
 
 def severity_pool(difficulty, frac):
@@ -108,10 +135,10 @@ def healthy_metrics():
 
 
 def apply_symptom(metrics, root_cause):
-    arche = ARCHETYPES[root_cause]
-    metrics.update(arche["metrics"])
-    metrics["healthStatus"] = arche["health"]
-    metrics["configStatus"] = arche.get("config", "STABLE")
+    spec = present(root_cause)
+    metrics.update(spec["metrics"])
+    metrics["healthStatus"] = spec["health"]
+    metrics["configStatus"] = spec.get("config", "STABLE")
 
 
 def clamp(v, lo, hi):
@@ -175,7 +202,9 @@ def build_plan(session_id, cell_count):
 def seed_session(session):
     sid = session["id"]
     players = get("/api/sessions/%d/players" % sid)
-    if len(players) < 2:
+    # Need at least one player. Head-to-head only activates with two (ready-check); solo Training
+    # activates with one — so by the time a session is ACTIVE it has the players it needs.
+    if len(players) < 1:
         return
     cell_count = DIFFICULTY_CELLS.get(session.get("difficulty", "MEDIUM"), CELL_COUNT)
     names, incidents = build_plan(sid, cell_count)
@@ -192,8 +221,8 @@ def seed_session(session):
         for idx, rc in incidents:
             name = names[idx]
             post("/api/internal/sessions/%d/incidents" % sid,
-                 {"playerId": pid, "cellId": name_to_id[name], "incidentType": ARCHETYPES[rc]["type"],
-                  "severity": ARCHETYPES[rc]["severity"], "rootCause": rc, "description": DESCRIPTIONS[rc]})
+                 {"playerId": pid, "cellId": name_to_id[name], "incidentType": present(rc)["label"],
+                  "severity": present(rc)["severity"], "rootCause": rc, "description": present(rc)["description"]})
     SESSIONS[sid] = state
     print("[sim] seeded session %d (%d cells, %d incidents per player)" % (sid, len(names), len(incidents)), flush=True)
 
@@ -285,8 +314,8 @@ def tick_session(session):
         # red cell with no incident on it (the evidence catches up a beat later, not before).
         for pid, name_to_id in state["players"].items():
             post("/api/internal/sessions/%d/incidents" % sid,
-                 {"playerId": pid, "cellId": name_to_id[name], "incidentType": ARCHETYPES[rc]["type"],
-                  "severity": ARCHETYPES[rc]["severity"], "rootCause": rc, "description": DESCRIPTIONS[rc]})
+                 {"playerId": pid, "cellId": name_to_id[name], "incidentType": present(rc)["label"],
+                  "severity": present(rc)["severity"], "rootCause": rc, "description": present(rc)["description"]})
         push_metrics(sid, state, name)
         merged[name] += 1
         spawned += 1
