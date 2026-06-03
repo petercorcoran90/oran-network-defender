@@ -15,8 +15,12 @@ in MySQL), so Kubernetes can add/remove pods transparently.
 # 1. point Locust at the in-cluster backend
 kubectl -n oran port-forward svc/backend-service 8080:8080
 
-# 2. (another terminal) watch the autoscaler + pods live
-kubectl -n oran get hpa,pods -w
+# 2. (another terminal) watch the autoscaler + pods live.
+#    NOTE: `kubectl -w` only watches ONE resource type, so use a refresh loop for both:
+while true; do clear; date; \
+  kubectl -n oran get hpa backend-hpa; echo; \
+  kubectl -n oran get pods -l app=backend; sleep 2; done
+#    (or two terminals: `kubectl -n oran get hpa -w` and `kubectl -n oran get pods -l app=backend -w`)
 
 # 3. (another terminal) start Locust — web UI on http://localhost:8089
 locust -f load-test/locustfile.py --host http://localhost:8080
@@ -27,7 +31,7 @@ locust -f load-test/locustfile.py --host http://localhost:8080 --headless -u 100
 ```
 
 ## What to capture (for the slide)
-- **Scale-up:** in the `kubectl get hpa,pods -w` terminal, the HPA CPU% climbs past 70% and
+- **Scale-up:** in the watch-loop terminal, the HPA CPU% climbs past 70% and
   `REPLICAS` rises 2 → 3 → 4 → 5; new `backend-*` pods appear and go `Running`.
 - **Scale-down:** **stop Locust** — CPU falls and replicas drop back to 2 within ~1 minute
   (we set a 30s scale-down stabilization window in the HPA `behavior`, vs the 5-min default).
