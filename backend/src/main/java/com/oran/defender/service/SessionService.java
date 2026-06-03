@@ -25,6 +25,7 @@ public class SessionService {
     static final int MAX_PLAYERS = 2;
 
     private static final String SESSION_NOT_FOUND = "Session not found";
+    private static final String USER_NOT_FOUND = "User not found";
 
     private static final int DEFAULT_DURATION_SECONDS = 300;
     // Ambiguous characters (0/O, 1/I) omitted so codes are easy to read out loud.
@@ -58,7 +59,7 @@ public class SessionService {
     @Transactional
     public Player createTrainingSession(Long userId, Integer durationSeconds) {
         AppUser user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException(USER_NOT_FOUND));
         var tier = com.oran.defender.engine.SkillTier.of(progressionService.getOrCreate(userId).learnedCount());
 
         GameSession session = new GameSession();
@@ -95,7 +96,7 @@ public class SessionService {
     @Transactional
     public GameSession createSession(String name, Long createdByUserId, Integer durationSeconds, String difficulty) {
         AppUser creator = userRepository.findById(createdByUserId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException(USER_NOT_FOUND));
         GameSession session = new GameSession();
         session.setName(name);
         session.setSessionCode(generateUniqueCode());
@@ -150,7 +151,7 @@ public class SessionService {
             throw new ConflictException("Session is not accepting players");
         }
         AppUser user = userRepository.findById(userId)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException(USER_NOT_FOUND));
         playerRepository.findByUserIdAndGameSessionId(userId, sessionId).ifPresent(existing -> {
             throw new ConflictException("User has already joined this session");
         });

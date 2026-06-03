@@ -243,8 +243,9 @@ class IncidentServiceTest {
     }
 
     // ---- investigation: diagnostics ----
-    // The shared incident's root cause is CELL_OVERLOAD, which presents as the CONGESTION group;
-    // the one diagnostic that applies to that group is INSPECT_AUTOMATION (budget 1).
+    // The shared incident's hidden cause is a cell overload, which the player sees as the
+    // "Congestion" symptom group. The only diagnostic that applies there is inspect-automation,
+    // and that group allows a single diagnostic (budget of one).
 
     @Test
     @DisplayName("runDiagnostic records the evidence and teaches the diagnostic")

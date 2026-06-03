@@ -262,32 +262,36 @@ function metricRow(label, value, unit, max, invert) {
 
 function IncidentDetail({ state, store, nav, route }) {
   const inc = state.incidents.find((i) => i.id === route.params.id);
-  if (!inc) return <div className="empty">Incident not found. <span className="link" onClick={() => nav('incidents')}>Back to list</span></div>;
-  const cell = state.cells.find((c) => c.id === inc.cellId);
-  const closed = inc.status !== 'open'; // resolved OR failed — no more actions either way
-  const failed = inc.status === 'failed';
-  const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
+  // Hooks must run on every render in the same order (rules of hooks), so they are all declared
+  // up front — never after the "incident not found" early-return guard, which lives below them.
   const [flash, setFlash] = React.useState(null);
   const [outcome, setOutcome] = React.useState(null);
   const [lesson, setLesson] = React.useState(null);
   const [evidence, setEvidence] = React.useState([]);
   const [running, setRunning] = React.useState(null);
-  const learnedActions = new Set(state.learnedActions || []);
   const [lines, setLines] = React.useState([]);
   const [cmd, setCmd] = React.useState('');
   const [history, setHistory] = React.useState([]);
   const histRef = React.useRef(-1);
   const termRef = React.useRef(null);
   React.useEffect(() => {
+    if (!inc) return undefined;
     let active = true;
     setEvidence([]);
     setLines([{ t: "Diagnostic console — type 'help' to list commands." }]);
     store.getDiagnostics(inc.id).then((list) => { if (active) setEvidence(list || []); }).catch(() => {});
     return () => { active = false; };
-  }, [inc.id]);
+  }, [inc?.id]);
   React.useEffect(() => {
     if (termRef.current) termRef.current.scrollTop = termRef.current.scrollHeight;
   }, [lines]);
+
+  if (!inc) return <div className="empty">Incident not found. <span className="link" onClick={() => nav('incidents')}>Back to list</span></div>;
+  const cell = state.cells.find((c) => c.id === inc.cellId);
+  const closed = inc.status !== 'open'; // resolved OR failed — no more actions either way
+  const failed = inc.status === 'failed';
+  const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
+  const learnedActions = new Set(state.learnedActions || []);
   async function investigate(name) {
     setRunning(name);
     const ev = await store.runDiagnostic(inc.id, name);

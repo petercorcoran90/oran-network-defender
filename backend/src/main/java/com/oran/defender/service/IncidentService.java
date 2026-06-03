@@ -121,7 +121,7 @@ public class IncidentService {
     public PlayerAction submitAction(Long sessionId, Long incidentId, Long playerId, Long actionId) {
         Incident incident = loadIncidentInSession(sessionId, incidentId);
         Player player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new NotFoundException("Player not found"));
+                .orElseThrow(() -> new NotFoundException(PLAYER_NOT_FOUND));
 
         // The player must be in this session...
         if (!player.getGameSession().getId().equals(sessionId)) {
@@ -190,7 +190,7 @@ public class IncidentService {
     public DiagnosticRun runDiagnostic(Long sessionId, Long incidentId, Long playerId, String diagnosticName) {
         Incident incident = loadIncidentInSession(sessionId, incidentId);
         Player player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new NotFoundException("Player not found"));
+                .orElseThrow(() -> new NotFoundException(PLAYER_NOT_FOUND));
         if (!player.getGameSession().getId().equals(sessionId)) {
             throw new InvalidActionException("Player is not part of this session");
         }
@@ -332,7 +332,7 @@ public class IncidentService {
     private Incident requireOwnOpenIncident(Long sessionId, Long incidentId, Long playerId) {
         Incident incident = loadIncidentInSession(sessionId, incidentId);
         Player player = playerRepository.findById(playerId)
-                .orElseThrow(() -> new NotFoundException("Player not found"));
+                .orElseThrow(() -> new NotFoundException(PLAYER_NOT_FOUND));
         if (!player.getGameSession().getId().equals(sessionId)) {
             throw new InvalidActionException("Player is not part of this session");
         }
@@ -415,6 +415,7 @@ public class IncidentService {
         cellRepository.save(cell);
     }
 
+    private static final String PLAYER_NOT_FOUND = "Player not found";
     private static final String CASCADE_TYPE = "Cascade Overload";
     private static final String CASCADE_DESC =
             "Traffic from a downed neighbouring cell has overloaded this one.";
