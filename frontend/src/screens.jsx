@@ -298,6 +298,8 @@ function IncidentDetail({ state, store, nav, route }) {
   const failed = inc.status === 'failed';
   const catalog = Object.keys(store.ACTIONS); // the real 9-action catalog from the backend
   const learnedActions = new Set(state.learnedActions || []);
+  // Actions not yet learned still show as Apply buttons; learned ones drop off (apply via console).
+  const unlearnedActions = catalog.filter((aid) => !learnedActions.has(store.ACTIONS[aid].actionName));
   async function onConsoleKey(e) {
     if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -441,12 +443,10 @@ function IncidentDetail({ state, store, nav, route }) {
           <div>
             {/* Once a remediation is learned it drops off this list — from then on you apply it
                 from the console. The list shrinks as the player graduates onto the command line. */}
-            {(() => {
-              const unlearned = catalog.filter((aid) => !learnedActions.has(store.ACTIONS[aid].actionName));
-              if (unlearned.length === 0) {
-                return <div className="empty" style={{ padding: 16 }}>You've learned every remediation — apply them from the console above.</div>;
-              }
-              return unlearned.map((aid) => {
+            {unlearnedActions.length === 0 ? (
+              <div className="empty" style={{ padding: 16 }}>You&apos;ve learned every remediation — apply them from the console above.</div>
+            ) : (
+              unlearnedActions.map((aid) => {
                 const a = store.ACTIONS[aid];
                 return (
                   <div key={aid} className={'action-row' + (flash === aid ? ' flash' : '')}>
@@ -458,8 +458,8 @@ function IncidentDetail({ state, store, nav, route }) {
                     <button className="btn" disabled={closed} onClick={() => apply(aid)}>Apply</button>
                   </div>
                 );
-              });
-            })()}
+              })
+            )}
           </div>
         </div>
       </div>
