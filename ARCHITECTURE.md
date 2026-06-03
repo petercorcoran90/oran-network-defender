@@ -39,13 +39,22 @@ and the higher score when the timer runs out wins. The framing mirrors the O-RAN
 ## Service responsibilities
 
 - **Frontend** (React + Vite; nginx in prod): renders state, submits actions, polls for
-  updates. Never computes outcomes. nginx reverse-proxies `/api` to the backend.
+  updates. Never computes outcomes. nginx reverse-proxies `/api` to the backend. Investigation
+  is **console-only** (an emulated terminal — no hint buttons or candidate board); a
+  self-contained **guided tutorial** teaches every fault offline.
 - **Game API** (Spring Boot): owns all state mutation; thin controllers → services →
   repositories. Returns **DTOs only** (never JPA entities) so the hidden `rootCause` and
-  lazy relations are never serialised.
+  lazy relations are never serialised. Beyond the core endpoints it serves investigation
+  (`…/incidents/{id}/diagnostics`, `…/console`), progression (`/users/{id}/skills|manual`) and
+  training (`POST /sessions/training`).
 - **Game Engine** (pure, no Spring/DB): `IncidentEvaluator` maps a hidden `RootCause` + chosen
   `ActionType` → `CORRECT/INEFFECTIVE/HARMFUL`; `ScoreCalculator` turns that into a points
-  delta (correctness + response-time bonus − action cost). Unit-testable in isolation.
+  delta (correctness + response-time bonus − action cost). The **investigation** layer is here
+  too: `SymptomGroup` (which causes share an ambiguous presentation), `DiagnosticType` +
+  `DiagnosticEvaluator` (a check confirms/rules-out one hypothesis), `ConsoleRenderer` (emulated
+  terminal output — never executes anything), and `SkillTier`. All unit-testable in isolation.
+- **ProgressionService**: tracks what each player has learned (actions + diagnostics, persisted
+  per user) — drives the tier, the Field Manual, and training difficulty.
 - **Python simulator** (own container): the **sole** generator of cells, incidents and metric
   changes. Polls the API for `ACTIVE` sessions and writes via `/api/internal/*`. No incoming
   connections.
@@ -57,7 +66,8 @@ and the higher score when the timer runs out wins. The framing mirrors the O-RAN
 ```
 AppUser(id, username, role, createdAt)
 GameSession(id, sessionCode, name, status[WAITING|ACTIVE|ENDED], difficulty[EASY|MEDIUM|HARD],
-            durationSeconds, startedAt, endedAt, forfeitedByPlayerId, createdByUser)
+            mode[HEAD_TO_HEAD|TRAINING], durationSeconds, startedAt,
+            endedAt /* null for training = no time limit */, forfeitedByPlayerId, createdByUser)
 Player(id, user, gameSession, teamName, score, ready, joinedAt)
 NetworkCell(id, gameSession, player, cellName, signalQuality, userLoad, latency, packetLoss,
             alarmCount, energyUsage, healthStatus[GOOD|WARNING|CRITICAL],
@@ -69,6 +79,8 @@ PlayerAction(id, player, incident, action, result[SUCCESS|PARTIAL|FAILED], point
 ScoreEvent(id, player, gameSession, reason, points, createdAt)   # append-only score history
 MatchResult(id, gameSessionId, winnerName, winnerScore, loserName, difficulty,
             durationSeconds, forfeit, createdAt)                 # high-score table
+DiagnosticRun(id, incident, player, diagnosticType, result[CONFIRMS|RULES_OUT], implicated, createdAt)
+UserSkill(userId, learnedActions[], learnedDiagnostics[])        # progression, persisted across matches
 ```
 Each player owns a **private, mirrored** copy of the network: `NetworkCell` and `Incident`
 carry a `player_id`, so one player's actions never affect the other's cells.
@@ -83,6 +95,28 @@ login (username) → create match (name, difficulty, minutes) OR join (code / br
    → timer expires (lazy on read) OR a player leaves (ragequit = forfeit)  → ENDED
    → end-of-game summary; a MatchResult row is recorded for the high-score table
 ```
+
+**Training mode** (`POST /sessions/training`) is a solo variant: one player, activates
+immediately, difficulty set by the player's tier, and **no time limit** (`endedAt = null`, so
+the lazy timer never ends it) — you leave when you're done. No `MatchResult` is recorded.
+
+## Investigation & learning progression
+
+Incidents are deliberately **ambiguous**: the simulator presents a `SymptomGroup` (e.g.
+"Congestion"), not the cause, so several remediations look plausible. The player must work out
+the real `RootCause` **in the console** — there are no hint buttons. The flow:
+
+- `help` lists the checks for the incident; `man <command>` reveals a command + its required
+  arguments; running a recognised command calls `IncidentService.runDiagnostic`, which returns
+  emulated terminal output to *read and interpret* (it never prints "confirmed/ruled out", and
+  never the hidden cause). A per-incident **diagnostic budget** caps how much you can test.
+- The console can also **apply** a remediation by its real CLI command (same engine + scoring as
+  the action button). Using an action/diagnostic the first time **teaches** it (persisted in
+  `UserSkill`); learned commands then drop off the easy-mode UI and fill in the **Field Manual**.
+- `SkillTier` (Trainee/Operator/Engineer, by count learned) gates training difficulty.
+
+Design detail in **CONSOLE_DESIGN.md** and **LEARNING_PROGRESSION.md**. The console is an
+**emulator** — a recognised command maps to generated text; nothing is ever executed.
 
 ## Real-time strategy
 
@@ -119,6 +153,11 @@ Probes:       backend liveness/readiness via /actuator/health/*
 The frontend nginx targets `backend-service` via the `BACKEND_HOST` env (envsubst). The
 simulator is **single-replica** (two would double-generate). The `/api/internal` endpoints
 stay cluster-internal (no Ingress) and are guarded by `SIM_INGEST_TOKEN`.
+
+The custom images use `imagePullPolicy: IfNotPresent` (built locally, no registry); the Secret
+is created from `.env` at deploy time and never committed. Deploy steps are in **k8s/README.md**.
+Verified end-to-end on Docker Desktop Kubernetes: all pods Running, the backend HPA reading CPU,
+and the in-cluster simulator seeding incidents through the full flow.
 
 ## Scalability notes
 

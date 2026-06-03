@@ -68,6 +68,20 @@ with reasons) — we did **not** disable rules or suppress issues to move rating
   security defects. Maintainability is already rated **A**, so no rule was disabled — the issues
   remain visible on the dashboard with this written rationale.
 
+### Current status (after the feature consolidation + gameplay/UX work)
+
+The quality gate is configured **clean-as-you-code** (0 new violations on new code) and currently
+**PASSES**. As new code landed we **fixed findings in code rather than accepting them** — including:
+- a genuine **rules-of-hooks bug** (`js:S6440`) in the incident screen (hooks declared after an
+  early return — a latent crash, not a style nit) — caught by Sonar and fixed;
+- **PropTypes added** to the new/changed React components (so new UI doesn't add to the S6774
+  backlog), plus refactors for nested ternaries, array-index keys and modal accessibility;
+- Java duplicate-literal constants (`S1192`).
+
+Nothing was rule-disabled or per-issue suppressed to pass. Coverage has since risen well above the
+first scan (backend instruction coverage ~93%; the full frontend suite now runs). The older
+untouched UI still carries the documented S6774 convention findings above (maintainability **A**).
+
 ## OWASP ZAP scan (DAST) — what was found / fixed / accepted
 
 Scanned the running app (`http://localhost:5173`) with OWASP ZAP. No High/Critical findings.
