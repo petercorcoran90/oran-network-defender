@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { Api, ApiError } from './api.js';
 
 /* ============================================================
@@ -21,10 +22,19 @@ function Field({ label, children }) {
   return <div style={{ marginBottom: 14 }}><label style={labelStyle}>{label}</label>{children}</div>;
 }
 
+Field.propTypes = {
+  label: PropTypes.string.isRequired,
+  children: PropTypes.node.isRequired,
+};
+
 function StatusTag({ status }) {
   const cls = status === 'ACTIVE' ? 'good' : status === 'WAITING' ? 'warn' : 'muted';
   return <span className={'tag ' + cls}>{status}</span>;
 }
+
+StatusTag.propTypes = {
+  status: PropTypes.string.isRequired,
+};
 
 export default function Lobby({ onEnter }) {
   const [step, setStep] = useState('identify');
@@ -324,3 +334,7 @@ export default function Lobby({ onEnter }) {
     </div>
   );
 }
+
+Lobby.propTypes = {
+  onEnter: PropTypes.func.isRequired,
+};
