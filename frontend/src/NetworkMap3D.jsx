@@ -372,7 +372,7 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
         if (p.t >= 1) { scene.remove(p.sp); p.sp.material.dispose(); pings.splice(i, 1); continue; }
         const x = p.fx + (p.tx - p.fx) * p.t;
         const z = p.fz + (p.tz - p.fz) * p.t;
-        const y = 0.35 + Math.sin(Math.PI * p.t) * 0.9;
+        const y = 0.12; // ride along the link line on the ground — no arc/hop between towers
         p.sp.position.set(x, y, z);
         p.sp.material.opacity = 0.95 * Math.sin(Math.PI * p.t);
       }
@@ -420,6 +420,12 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
   return (
     <div className="map3d" ref={mountRef} style={{ position: 'relative', width: '100%', height }}>
       <div className="map3d-hint">drag to orbit · scroll to zoom · click a tower</div>
+      {(!cells || cells.length === 0) && (
+        <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+          pointerEvents: 'none', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+          Linking to the network…
+        </div>
+      )}
     </div>
   );
 }
