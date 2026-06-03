@@ -2,6 +2,7 @@ package com.oran.defender.dto;
 
 import com.oran.defender.engine.ActionType;
 import com.oran.defender.engine.DiagnosticType;
+import com.oran.defender.engine.RootCause;
 import com.oran.defender.engine.SkillTier;
 import com.oran.defender.model.UserSkill;
 import java.util.List;
@@ -33,7 +34,7 @@ public record ManualResponse(
         return new ManualResponse(
                 SkillTier.of(skill.learnedCount()).name(),
                 diagnostics, actions,
-                DiagnosticType.values().length, ActionType.values().length);
+                DiagnosticType.values().length, RootCause.learnableActions().size());
     }
 
     private static String pretty(String enumName) {

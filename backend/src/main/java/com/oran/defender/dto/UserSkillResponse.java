@@ -1,7 +1,7 @@
 package com.oran.defender.dto;
 
-import com.oran.defender.engine.ActionType;
 import com.oran.defender.engine.DiagnosticType;
+import com.oran.defender.engine.RootCause;
 import com.oran.defender.engine.SkillTier;
 import com.oran.defender.model.UserSkill;
 import java.util.List;
@@ -16,7 +16,7 @@ public record UserSkillResponse(
         int total
 ) {
     public static UserSkillResponse from(UserSkill skill) {
-        int total = ActionType.values().length + DiagnosticType.values().length;
+        int total = RootCause.learnableActions().size() + DiagnosticType.values().length;
         int learned = skill.learnedCount();
         return new UserSkillResponse(
                 skill.getUserId(),

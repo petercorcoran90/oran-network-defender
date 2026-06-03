@@ -130,6 +130,7 @@ class UserControllerTest {
         assertEquals(1L, result.userId());
         assertEquals(2, result.learned());
         assertEquals("TRAINEE", result.tier()); // 2 learned -> TRAINEE
+        assertEquals(14, result.total()); // 8 learnable fixes + 6 diagnostics (Restart Cell is a trap, not counted)
         assertTrue(result.learnedActions().contains("REBALANCE_TRAFFIC"));
         assertTrue(result.learnedDiagnostics().contains("TRACE_TRANSPORT"));
         verify(progressionService, times(1)).getOrCreate(1L);
@@ -158,6 +159,7 @@ class UserControllerTest {
         assertEquals("traceroute o-ru", result.diagnostics().get(0).command());
         assertTrue(result.actions().isEmpty()); // no actions learned yet
         assertEquals(6, result.diagnosticsTotal()); // all six diagnostics exist as targets
+        assertEquals(8, result.actionsTotal()); // 8 fixable faults; Restart Cell is a trap, not learnable
     }
 
     private AppUser buildUser(String username, String role) {

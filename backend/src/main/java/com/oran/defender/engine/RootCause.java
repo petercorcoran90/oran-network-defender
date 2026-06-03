@@ -1,5 +1,6 @@
 package com.oran.defender.engine;
 
+import java.util.EnumSet;
 import java.util.Set;
 
 /**
@@ -52,5 +53,18 @@ public enum RootCause {
 
     public boolean isTrap(ActionType action) {
         return trapActions.contains(action);
+    }
+
+    /**
+     * The actions that are the correct fix for some fault — i.e. the only remediations a player
+     * can ever learn. Excludes pure traps such as RESTART_CELL that never resolve any incident,
+     * so progress counters (Field Manual / skill tier) are completable.
+     */
+    public static Set<ActionType> learnableActions() {
+        EnumSet<ActionType> learnable = EnumSet.noneOf(ActionType.class);
+        for (RootCause rc : values()) {
+            learnable.add(rc.correctAction);
+        }
+        return learnable;
     }
 }
