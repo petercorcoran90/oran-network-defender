@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { Api, ApiError } from './api.js';
+import { Icon } from './ui.jsx';
 
 /* ============================================================
    Lobby.jsx — real backend connect flow (the first wired slice).
@@ -190,11 +191,11 @@ export default function Lobby({ onEnter, onTutorial }) {
               <button className="btn primary" disabled={busy || !username.trim()} onClick={identify}>
                 {busy ? 'Connecting…' : 'Continue'}
               </button>
-              <button className="btn ghost" disabled={busy} onClick={loadScores} style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}>
-                🏆 Top scorers
+              <button className="btn ghost" disabled={busy} onClick={loadScores} style={{ width: '100%', justifyContent: 'center', marginTop: 10, gap: 8 }}>
+                <Icon name="trophy" size={14} /> Top scorers
               </button>
-              <button className="btn ghost" onClick={onTutorial} style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}>
-                🎓 New here? Take the tutorial
+              <button className="btn ghost" onClick={onTutorial} style={{ width: '100%', justifyContent: 'center', marginTop: 10, gap: 8 }}>
+                <Icon name="learn" size={14} /> New here? Take the tutorial
               </button>
             </>
           )}

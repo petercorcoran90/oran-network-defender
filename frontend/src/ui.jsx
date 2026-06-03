@@ -35,6 +35,7 @@ function Icon({ name, size = 16, ...p }) {
     bell: <><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" /><path d="M10.5 20a2 2 0 0 0 3 0" /></>,
     plus: <><path d="M12 5v14M5 12h14" /></>,
     clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+    learn: <><path d="M12 4 2 9l10 5 10-5-10-5Z" /><path d="M6 11v4c0 1.1 2.7 2.5 6 2.5s6-1.4 6-2.5v-4" /><path d="M22 9v4" /></>,
   };
   return <svg {...P}>{g[name] || null}</svg>;
 }

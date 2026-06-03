@@ -129,15 +129,26 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
     rim.position.set(-10, 6, -8);
     scene.add(rim);
 
-    // ---- ground ----
+    // ---- ground: a flat gridded pad where the towers stand, with gentle green hills beyond it ----
+    const groundGeo = new THREE.PlaneGeometry(90, 90, 64, 64);
+    const gpos = groundGeo.attributes.position;
+    for (let i = 0; i < gpos.count; i++) {
+      const x = gpos.getX(i);
+      const y = gpos.getY(i); // plane-local Y maps to world Z after the -90° rotation
+      // ramp stays 0 under the towers (r < 28) so nothing floats, then rises toward the edges
+      const ramp = Math.max(0, (Math.hypot(x, y) - 28) / 17);
+      const h = ramp * (Math.sin(x * 0.18) * Math.cos(y * 0.16) * 1.6 + Math.sin(x * 0.07 + y * 0.05) * 0.9);
+      gpos.setZ(i, h); // plane-local Z becomes world height
+    }
+    groundGeo.computeVertexNormals();
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(90, 90),
-      new THREE.MeshStandardMaterial({ color: 0x0a0c0e, roughness: 1, metalness: 0 })
+      groundGeo,
+      new THREE.MeshStandardMaterial({ color: 0x14301f, roughness: 1, metalness: 0 }) // muted green earth
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
-    const grid = new THREE.GridHelper(90, 45, 0x1f4633, 0x12201a);
-    grid.position.y = 0.01;
+    const grid = new THREE.GridHelper(48, 24, 0x2c7a52, 0x163e2a); // only over the flat tower pad
+    grid.position.y = 0.02;
     scene.add(grid);
 
     const SPREAD = 22;
@@ -147,7 +158,7 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
     const towers = new Map();
     const pickMeshes = [];
     let linkLines = null;
-    const steel = new THREE.MeshStandardMaterial({ color: 0x556069, roughness: 0.45, metalness: 0.7 });
+    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa6ad, roughness: 0.45, metalness: 0.7 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x23282d, roughness: 0.7, metalness: 0.3 });
 
     // ---- build one tower ----
