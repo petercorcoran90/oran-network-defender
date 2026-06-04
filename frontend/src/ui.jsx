@@ -123,14 +123,14 @@ function Topology({ cells, height = 360 }) {
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
           {E.map(([a, b, , ctrl], i) => (
             <line key={i} x1={N[a].x} y1={N[a].y} x2={N[b].x} y2={N[b].y}
-              stroke="rgba(120,200,150,.28)" strokeWidth=".4"
+              stroke="var(--text-3)" strokeWidth=".7"
               strokeDasharray={ctrl ? '1.5 1.5' : undefined} vectorEffect="non-scaling-stroke" />
           ))}
         </svg>
         {E.filter(([, , lbl]) => lbl).map(([a, b, lbl], i) => (
           <span key={'l' + i} style={{
             position: 'absolute', left: (N[a].x + N[b].x) / 2 + '%', top: (N[a].y + N[b].y) / 2 + '%',
-            transform: 'translate(-50%,-50%)', fontSize: 9, letterSpacing: '.04em', color: 'var(--text-3)',
+            transform: 'translate(-50%,-50%)', fontSize: 11, letterSpacing: '.04em', color: 'var(--text-2)',
             background: 'var(--panel)', padding: '0 4px', borderRadius: 2, whiteSpace: 'nowrap', pointerEvents: 'none',
           }}>{lbl}</span>
         ))}
