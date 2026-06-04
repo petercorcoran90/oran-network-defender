@@ -33,6 +33,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "accent": "#ffb020",
   "fontPair": "command",
   "density": "cozy",
+  "theme": "dark",
   "difficulty": "normal",
   "simSpeed": 1
 }/*EDITMODE-END*/;
@@ -68,8 +69,9 @@ function App() {
     const fp = FONT_PAIRS[t.fontPair] || FONT_PAIRS.command;
     root.style.setProperty('--font-head', fp.head);
     root.style.setProperty('--font-mono', fp.mono);
-    root.setAttribute('data-density', t.density);
-  }, [t.accent, t.fontPair, t.density]);
+    root.dataset.density = t.density;
+    root.dataset.theme = t.theme;
+  }, [t.accent, t.fontPair, t.density, t.theme]);
 
   // The guided tutorial is self-contained — show it over everything else when active.
   if (tutorial) return <Tutorial onExit={() => setTutorial(false)} />;
@@ -148,6 +150,9 @@ function App() {
         <TweakRadio label="Density" value={t.density}
           options={[{ label: 'Compact', value: 'compact' }, { label: 'Cozy', value: 'cozy' }, { label: 'Comfy', value: 'comfy' }]}
           onChange={(v) => setTweak('density', v)} />
+        <TweakRadio label="Theme" value={t.theme}
+          options={[{ label: 'Dark', value: 'dark' }, { label: 'Light', value: 'light' }]}
+          onChange={(v) => setTweak('theme', v)} />
       </TweaksPanel>
 
       {confirmLeave && (
