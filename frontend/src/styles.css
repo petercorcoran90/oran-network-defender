@@ -72,6 +72,7 @@
 [data-theme="light"] .bar,
 [data-theme="light"] .metric .mbar { background: rgba(20,40,30,.12); }
 [data-theme="light"] .switch i { background: #ffffff; }
+[data-theme="light"] .tag.muted { background: rgba(20,40,30,.07); } /* "rules out" etc. — was hard-coded dark */
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }

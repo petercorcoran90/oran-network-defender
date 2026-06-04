@@ -54,10 +54,12 @@ function makeBg(top, mid, bot) {
 const MAP_THEMES = {
   dark:  { bg: ['#141c22', '#0b0f13', '#08090b'], fog: 0x0a0c0e, ground: 0x14301f,
            gridA: 0x2c7a52, gridB: 0x163e2a, hemiSky: 0xbfe6d0, hemiGround: 0x0a0c0e,
-           hemiInt: 0.8, keyInt: 0.65, rimInt: 0.22, steel: 0x9aa6ad, strut: 0x23282d },
+           hemiInt: 0.8, keyInt: 0.65, rimInt: 0.22, steel: 0x9aa6ad, strut: 0x23282d,
+           bloomStrength: 0.95, bloomThreshold: 0.82 },
   light: { bg: ['#cfe0d6', '#dde8e0', '#eef1ee'], fog: 0xe6ece8, ground: 0x86b394,
            gridA: 0x5fa078, gridB: 0xaecdbb, hemiSky: 0xffffff, hemiGround: 0xcfe0d6,
-           hemiInt: 1.15, keyInt: 0.95, rimInt: 0.12, steel: 0x808a91, strut: 0x6b737b },
+           hemiInt: 1.15, keyInt: 0.95, rimInt: 0.12, steel: 0x808a91, strut: 0x6b737b,
+           bloomStrength: 0.35, bloomThreshold: 1.0 },
 };
 const mapTheme = () => MAP_THEMES[document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'];
 
@@ -125,7 +127,7 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
     // bloom composer
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 0.95, 0.55, 0.82);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), pal.bloomStrength, 0.55, pal.bloomThreshold);
     composer.addPass(bloom);
 
     const labelLayer = document.createElement('div');
@@ -188,6 +190,7 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
       hemi.color.set(pal.hemiSky); hemi.groundColor.set(pal.hemiGround); hemi.intensity = pal.hemiInt;
       keyLight.intensity = pal.keyInt; rim.intensity = pal.rimInt;
       steel.color.set(pal.steel); dark.color.set(pal.strut);
+      bloom.strength = pal.bloomStrength; bloom.threshold = pal.bloomThreshold;
     }
     const themeObserver = new MutationObserver(applyMapTheme);
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
