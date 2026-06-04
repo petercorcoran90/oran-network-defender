@@ -69,8 +69,8 @@ function App() {
     const fp = FONT_PAIRS[t.fontPair] || FONT_PAIRS.command;
     root.style.setProperty('--font-head', fp.head);
     root.style.setProperty('--font-mono', fp.mono);
-    root.setAttribute('data-density', t.density);
-    root.setAttribute('data-theme', t.theme);
+    root.dataset.density = t.density;
+    root.dataset.theme = t.theme;
   }, [t.accent, t.fontPair, t.density, t.theme]);
 
   // The guided tutorial is self-contained — show it over everything else when active.
