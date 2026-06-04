@@ -43,6 +43,36 @@
 [data-density="cozy"]    { --d: 1; }
 [data-density="comfy"]   { --d: 1.16; }
 
+/* ---- Light theme: re-map the colour palette + a few hard-coded dark surfaces.
+   Toggled from the Tweaks menu (sets data-theme="light" on <html>). The 3D map is WebGL
+   with its own colours, so it stays dark — a dark map panel reads fine on a light UI. ---- */
+[data-theme="light"] {
+  --bg: #eef1ee;
+  --bg-2: #e6eae6;
+  --panel: #ffffff;
+  --panel-2: #f6f8f6;
+  --inset: #eceeec;
+  --raise: #ffffff;
+  --hair: rgba(20,40,30,.14);
+  --hair-2: rgba(20,40,30,.22);
+  --text: #18211c;
+  --text-2: #475249;
+  --text-3: #6f7a72;
+  --good: #1a9d57;
+  --warn: #b9760a;
+  --crit: #d62b2b;
+  --info: #0a85c2;
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb { background: #c2cac4; }
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: #aab2ac; }
+[data-theme="light"] .nav-item:hover,
+[data-theme="light"] .side-user:hover,
+[data-theme="light"] tbody tr:hover,
+[data-theme="light"] .inc-mini:hover { background: rgba(0,0,0,.045); }
+[data-theme="light"] .bar,
+[data-theme="light"] .metric .mbar { background: rgba(20,40,30,.12); }
+[data-theme="light"] .switch i { background: #ffffff; }
+
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body {
