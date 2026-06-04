@@ -28,18 +28,18 @@ const PANEL_CSS = `
 .twk-fab{position:fixed;right:18px;bottom:18px;z-index:9998;width:46px;height:46px;border-radius:50%;
   background:var(--accent);color:#1a1306;border:none;cursor:pointer;display:grid;place-items:center;
   box-shadow:0 6px 22px -6px rgba(0,0,0,.7)}
-.twk-panel{position:fixed;right:18px;bottom:18px;z-index:9999;width:278px;background:#0d0f12;
-  border:1px solid rgba(150,170,160,.22);border-radius:8px;box-shadow:0 20px 50px -16px rgba(0,0,0,.8);
+.twk-panel{position:fixed;right:18px;bottom:18px;z-index:9999;width:278px;background:var(--panel);
+  border:1px solid var(--hair-2);border-radius:8px;box-shadow:0 20px 50px -16px rgba(0,0,0,.35);
   font-family:var(--font-mono);color:var(--text);overflow:hidden}
 .twk-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;
-  border-bottom:1px solid rgba(150,170,160,.13);font-family:var(--font-head);font-weight:600;
+  border-bottom:1px solid var(--hair);font-family:var(--font-head);font-weight:600;
   text-transform:uppercase;letter-spacing:.05em;font-size:13px}
 .twk-x{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:15px}
 .twk-body{padding:6px 14px 14px;max-height:70vh;overflow:auto}
 .twk-sec{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-3);margin:14px 0 8px}
 .twk-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:9px 0}
 .twk-row label{font-size:11.5px;color:var(--text-2)}
-.twk-seg{display:flex;background:#0a0c0e;border:1px solid rgba(150,170,160,.13);border-radius:4px;padding:2px}
+.twk-seg{display:flex;background:var(--inset);border:1px solid var(--hair);border-radius:4px;padding:2px}
 .twk-seg button{flex:1;background:none;border:none;color:var(--text-2);font-size:10.5px;padding:5px 7px;
   border-radius:2px;cursor:pointer;font-family:inherit;text-transform:uppercase}
 .twk-seg button.on{background:color-mix(in oklab,var(--accent) 18%,transparent);color:var(--accent)}
