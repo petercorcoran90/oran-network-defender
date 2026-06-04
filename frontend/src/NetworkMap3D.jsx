@@ -36,19 +36,30 @@ function makeGlowTexture() {
 }
 
 // vertical gradient background (kept opaque so bloom composites cleanly)
-function makeBgTexture() {
+function makeBg(top, mid, bot) {
   const cv = document.createElement('canvas');
   cv.width = 2; cv.height = 256;
   const ctx = cv.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, '#141c22');
-  g.addColorStop(0.55, '#0b0f13');
-  g.addColorStop(1, '#08090b');
+  g.addColorStop(0, top);
+  g.addColorStop(0.55, mid);
+  g.addColorStop(1, bot);
   ctx.fillStyle = g; ctx.fillRect(0, 0, 2, 256);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
+
+// Day / night palettes for the 3D scene — driven by the CSS theme (data-theme on <html>).
+const MAP_THEMES = {
+  dark:  { bg: ['#141c22', '#0b0f13', '#08090b'], fog: 0x0a0c0e, ground: 0x14301f,
+           gridA: 0x2c7a52, gridB: 0x163e2a, hemiSky: 0xbfe6d0, hemiGround: 0x0a0c0e,
+           hemiInt: 0.8, keyInt: 0.65, rimInt: 0.22, steel: 0x9aa6ad, strut: 0x23282d },
+  light: { bg: ['#cfe0d6', '#dde8e0', '#eef1ee'], fog: 0xe6ece8, ground: 0x86b394,
+           gridA: 0x5fa078, gridB: 0xaecdbb, hemiSky: 0xffffff, hemiGround: 0xcfe0d6,
+           hemiInt: 1.15, keyInt: 0.95, rimInt: 0.12, steel: 0x808a91, strut: 0x6b737b },
+};
+const mapTheme = () => MAP_THEMES[document.documentElement.dataset.theme === 'light' ? 'light' : 'dark'];
 
 // a thin cylinder strut between two points (for the lattice)
 function strut(p1, p2, r, mat) {
@@ -99,9 +110,10 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
     let W = mount.clientWidth || 600;
     let H = mount.clientHeight || height;
 
+    let pal = mapTheme();
     const scene = new THREE.Scene();
-    scene.background = makeBgTexture();
-    scene.fog = new THREE.Fog(0x0a0c0e, 26, 58);
+    scene.background = makeBg(...pal.bg);
+    scene.fog = new THREE.Fog(pal.fog, 26, 58);
 
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 200);
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -121,11 +133,12 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
     mount.appendChild(labelLayer);
 
     // ---- lighting ----
-    scene.add(new THREE.HemisphereLight(0xbfe6d0, 0x0a0c0e, 0.8));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.65);
+    const hemi = new THREE.HemisphereLight(pal.hemiSky, pal.hemiGround, pal.hemiInt);
+    scene.add(hemi);
+    const keyLight = new THREE.DirectionalLight(0xffffff, pal.keyInt);
     keyLight.position.set(8, 16, 10);
     scene.add(keyLight);
-    const rim = new THREE.DirectionalLight(0x7fbfff, 0.22);
+    const rim = new THREE.DirectionalLight(0x7fbfff, pal.rimInt);
     rim.position.set(-10, 6, -8);
     scene.add(rim);
 
@@ -143,11 +156,11 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
     groundGeo.computeVertexNormals();
     const ground = new THREE.Mesh(
       groundGeo,
-      new THREE.MeshStandardMaterial({ color: 0x14301f, roughness: 1, metalness: 0 }) // muted green earth
+      new THREE.MeshStandardMaterial({ color: pal.ground, roughness: 1, metalness: 0 }) // earth
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
-    const grid = new THREE.GridHelper(48, 24, 0x2c7a52, 0x163e2a); // only over the flat tower pad
+    let grid = new THREE.GridHelper(48, 24, pal.gridA, pal.gridB); // only over the flat tower pad
     grid.position.y = 0.02;
     scene.add(grid);
 
@@ -158,8 +171,26 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
     const towers = new Map();
     const pickMeshes = [];
     let linkLines = null;
-    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa6ad, roughness: 0.45, metalness: 0.7 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x23282d, roughness: 0.7, metalness: 0.3 });
+    const steel = new THREE.MeshStandardMaterial({ color: pal.steel, roughness: 0.45, metalness: 0.7 });
+    const dark = new THREE.MeshStandardMaterial({ color: pal.strut, roughness: 0.7, metalness: 0.3 });
+
+    // Re-colour the whole scene when the UI theme flips (data-theme on <html>) — towers share
+    // the steel/strut materials, so updating those recolours every tower at once.
+    function applyMapTheme() {
+      pal = mapTheme();
+      const oldBg = scene.background;
+      scene.background = makeBg(...pal.bg);
+      if (oldBg && oldBg.dispose) oldBg.dispose();
+      scene.fog.color.set(pal.fog);
+      ground.material.color.set(pal.ground);
+      scene.remove(grid); grid.geometry.dispose(); grid.material.dispose();
+      grid = new THREE.GridHelper(48, 24, pal.gridA, pal.gridB); grid.position.y = 0.02; scene.add(grid);
+      hemi.color.set(pal.hemiSky); hemi.groundColor.set(pal.hemiGround); hemi.intensity = pal.hemiInt;
+      keyLight.intensity = pal.keyInt; rim.intensity = pal.rimInt;
+      steel.color.set(pal.steel); dark.color.set(pal.strut);
+    }
+    const themeObserver = new MutationObserver(applyMapTheme);
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     // ---- build one tower ----
     function buildTower(cell) {
@@ -395,6 +426,7 @@ export function NetworkMap({ cells, links, selectedId, onSelect, height = 460 })
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      themeObserver.disconnect();
       dom.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
